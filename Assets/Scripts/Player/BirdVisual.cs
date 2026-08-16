@@ -2,11 +2,16 @@ using UnityEngine;
 
 namespace FlyingChick
 {
-    // Cute-chick look, built procedurally at Awake (no imported art -- spec
-    // explicitly allows this for M1: circle/ellipse/triangle-beak drawing
-    // baked into a runtime texture). Body/belly/crest/beak/eye are one static
-    // sprite; only a separate wing sprite moves, matching the reference's
-    // per-frame wing-only flap redraw.
+    // Cute-chick look, built procedurally (no imported art -- spec explicitly
+    // allows this for M1: circle/ellipse/triangle-beak drawing baked into a
+    // runtime texture). Body/belly/crest/beak/eye are one static sprite;
+    // only a separate wing sprite moves, matching the reference's per-frame
+    // wing-only flap redraw.
+    //
+    // M6: body/belly/wing colors come from BirdCollection.SelectedBird
+    // (ApplyBird), so switching birds on the Start screen actually changes
+    // how the bird looks. Beak/crest/eye stay fixed -- shared chick features
+    // across every bird in the pool, not part of BirdDefinition.
     public class BirdVisual : MonoBehaviour
     {
         [SerializeField] private int textureSize = 64;
@@ -17,13 +22,16 @@ namespace FlyingChick
         [SerializeField] private Color wingColor = new Color(0.93f, 0.72f, 0.15f);
 
         private BirdController controller;
+        private BirdCollection collection;
         private Transform wingTransform;
+        private SpriteRenderer bodyRenderer;
+        private SpriteRenderer wingRenderer;
 
         private void Awake()
         {
             controller = GetComponent<BirdController>();
 
-            var bodyRenderer = gameObject.AddComponent<SpriteRenderer>();
+            bodyRenderer = gameObject.AddComponent<SpriteRenderer>();
             bodyRenderer.sprite = BuildBodySprite();
             bodyRenderer.sortingOrder = 10;
 
@@ -32,9 +40,33 @@ namespace FlyingChick
             wingTransform = wingGO.transform;
             wingTransform.localPosition = new Vector3(-3f, -1f, 0f);
 
-            var wingRenderer = wingGO.AddComponent<SpriteRenderer>();
+            wingRenderer = wingGO.AddComponent<SpriteRenderer>();
             wingRenderer.sprite = ProceduralSprite.CreateEllipse(18, 12, wingColor);
             wingRenderer.sortingOrder = 9;
+        }
+
+        public void SetCollection(BirdCollection collectionRef)
+        {
+            collection = collectionRef;
+            collection.OnSelectionChanged += HandleSelectionChanged;
+            ApplyBird(collection.SelectedBird);
+        }
+
+        private void OnDestroy()
+        {
+            if (collection != null) collection.OnSelectionChanged -= HandleSelectionChanged;
+        }
+
+        private void HandleSelectionChanged() => ApplyBird(collection.SelectedBird);
+
+        private void ApplyBird(BirdDefinition bird)
+        {
+            bodyColor = bird.BodyColor;
+            bellyColor = bird.BellyColor;
+            wingColor = bird.WingColor;
+
+            bodyRenderer.sprite = BuildBodySprite();
+            wingRenderer.sprite = ProceduralSprite.CreateEllipse(18, 12, wingColor);
         }
 
         private void Update()

@@ -25,6 +25,17 @@ namespace FlyingChick
         public event Action OnFeverStart;
         public event Action OnFeverEnd;
 
+        private BirdCollection collection;
+
+        // Wired once BirdCollection exists (M6); applies FeverDurationBonus
+        // perk to both the base duration and the cap (otherwise the bonus
+        // would just be wasted once a long fever chain hits maxDuration).
+        public void SetCollection(BirdCollection collectionRef) => collection = collectionRef;
+
+        private float PerkBonus => collection != null && collection.SelectedBird.Perk == PerkType.FeverDurationBonus
+            ? collection.SelectedBird.PerkValue
+            : 0f;
+
         private void Start()
         {
             if (GameManager.Instance != null)
@@ -42,13 +53,13 @@ namespace FlyingChick
             if (!IsActive)
             {
                 IsActive = true;
-                TimeRemaining = baseDuration;
+                TimeRemaining = baseDuration + PerkBonus;
                 sessionElapsed = 0f;
                 OnFeverStart?.Invoke();
             }
             else
             {
-                TimeRemaining = Mathf.Min(maxDuration, TimeRemaining + extendPerSlide);
+                TimeRemaining = Mathf.Min(maxDuration + PerkBonus, TimeRemaining + extendPerSlide);
             }
         }
 

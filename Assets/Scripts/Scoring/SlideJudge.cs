@@ -20,6 +20,7 @@ namespace FlyingChick
 
         private BirdController bird;
         private FeverSystem fever;
+        private BirdCollection collection;
 
         public void Configure(BirdController birdRef, FeverSystem feverRef)
         {
@@ -28,6 +29,9 @@ namespace FlyingChick
             bird.OnGreatSlideLanding += HandleGreatSlide;
             bird.OnMissedLanding += HandleMiss;
         }
+
+        // Wired once BirdCollection exists (M6); applies SlideScoreBonus perk.
+        public void SetCollection(BirdCollection collectionRef) => collection = collectionRef;
 
         private void Start()
         {
@@ -59,6 +63,8 @@ namespace FlyingChick
 
             float mult = GameManager.Instance.Multiplier;
             float baseScore = baseSlideScore * (mult / 10f);
+            if (collection != null && collection.SelectedBird.Perk == PerkType.SlideScoreBonus)
+                baseScore *= 1f + collection.SelectedBird.PerkValue;
             float multiplierAtAdd = fever.Multiplier; // capture before this slide can trigger fever
             ScoreManager.Instance.AddScore(baseScore);
 

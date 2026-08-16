@@ -25,7 +25,11 @@ namespace FlyingChick
         public float ViewHeight => viewHeight;
         public float ScrollX { get; private set; }
         public int Island { get; private set; } = 1;
-        public int Multiplier => 10 + (Island - 1) * 2;
+        // NestBonus (M5): permanent +N to the starting multiplier, earned by
+        // completing all 3 Nest Multiplier objectives in a run. GameManager
+        // just holds the number -- NestMultiplier owns the why/persistence.
+        public int NestBonus { get; set; }
+        public int Multiplier => 10 + NestBonus + (Island - 1) * 2;
         public GameState State { get; private set; } = GameState.Start;
 
         // Single shared terrain instance -- TerrainGenerator and BirdPhysics
@@ -36,6 +40,10 @@ namespace FlyingChick
 
         public event Action<int> OnIslandAdvanced;
         public event Action OnRunStart;
+        // Fired once when the day-length timer runs out, before State
+        // becomes DayOver -- all of that run's stats are still live at this
+        // point. NestMultiplier/CoinWallet hook run-end bookkeeping here.
+        public event Action OnRunEnd;
 
         private float islandDistance;
 
@@ -64,6 +72,7 @@ namespace FlyingChick
         // Called by DayCycle when the day-length timer runs out.
         public void EndRun()
         {
+            OnRunEnd?.Invoke();
             State = GameState.DayOver;
         }
 

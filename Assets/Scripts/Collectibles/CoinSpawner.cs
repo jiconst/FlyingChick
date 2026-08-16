@@ -14,11 +14,16 @@ namespace FlyingChick
         [SerializeField] private float coinScore = 3f;
 
         public event Action<Vector3, string, Color> OnPickupPopup;
+        // Clean domain events (no visual payload) for systems that just need
+        // to count pickups -- DailyMissions, future stats.
+        public event Action OnCoinCollected;
+        public event Action OnSpeedCoinCollected;
 
         private CoinField field;
         private BirdController bird;
         private Camera cam;
         private PickupBurst burst;
+        private BirdCollection collection;
 
         private SpriteRenderer[] pool;
         private Sprite coinSprite;
@@ -31,6 +36,13 @@ namespace FlyingChick
             burst = burstRef;
             field = new CoinField(seed, GameManager.Instance.ScrollX);
         }
+
+        // Wired once BirdCollection exists (M6); applies CoinMagnet perk.
+        public void SetCollection(BirdCollection collectionRef) => collection = collectionRef;
+
+        private float EffectivePickupRadius => collection != null && collection.SelectedBird.Perk == PerkType.CoinMagnet
+            ? pickupRadius + collection.SelectedBird.PerkValue
+            : pickupRadius;
 
         private void Start()
         {
@@ -70,17 +82,21 @@ namespace FlyingChick
         private void LateUpdate()
         {
             var gm = GameManager.Instance;
-            float width = ScreenSpace.ViewWidth(gm.ViewHeight, cam.aspect);
-            field.EnsureCoverage(gm.ScrollX + width * 1.2f);
+            // Zoom-aware bounds (see ScreenSpace.LeftEdgeCanvasX comment) --
+            // CameraZoom (M7) can widen the visible range beyond baseline.
+            float leftEdge = ScreenSpace.LeftEdgeCanvasX(gm.ViewHeight, cam.aspect, cam.orthographicSize);
+            float rightEdge = ScreenSpace.RightEdgeCanvasX(gm.ViewHeight, cam.aspect, cam.orthographicSize);
+            field.EnsureCoverage(gm.ScrollX + rightEdge + (rightEdge - leftEdge) * 0.2f);
 
             CheckPickups(gm);
-            RenderVisible(gm, width);
+            RenderVisible(gm, leftEdge, rightEdge);
         }
 
         private void CheckPickups(GameManager gm)
         {
             var entries = field.Entries;
-            float rr = pickupRadius * pickupRadius;
+            float radius = EffectivePickupRadius;
+            float rr = radius * radius;
 
             for (int i = 0; i < entries.Count; i++)
             {
@@ -101,17 +117,19 @@ namespace FlyingChick
                     bird.AddSpeedBoost(speedBoostAmount);
                     burst.Burst(worldPos, new Color(0.25f, 0.65f, 1f), 12);
                     OnPickupPopup?.Invoke(worldPos, "SPEED!", new Color(0.25f, 0.65f, 1f));
+                    OnSpeedCoinCollected?.Invoke();
                 }
                 else
                 {
                     ScoreManager.Instance.AddScore(coinScore);
                     burst.Burst(worldPos, new Color(1f, 0.82f, 0.25f), 6);
                     OnPickupPopup?.Invoke(worldPos, "+3", new Color(1f, 0.82f, 0.25f));
+                    OnCoinCollected?.Invoke();
                 }
             }
         }
 
-        private void RenderVisible(GameManager gm, float width)
+        private void RenderVisible(GameManager gm, float leftEdge, float rightEdge)
         {
             int used = 0;
             var entries = field.Entries;
@@ -122,7 +140,7 @@ namespace FlyingChick
                 if (e.Taken) continue;
 
                 float canvasX = e.WorldX - gm.ScrollX;
-                if (canvasX < -60f || canvasX > width + 60f) continue;
+                if (canvasX < leftEdge - 60f || canvasX > rightEdge + 60f) continue;
 
                 float canvasY = gm.Ground.GroundY(e.WorldX) - e.Offset;
                 var sr = pool[used++];

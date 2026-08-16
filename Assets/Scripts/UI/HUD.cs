@@ -44,6 +44,7 @@ namespace FlyingChick
         private Camera cam;
         private CoinSpawner coinSpawner;
         private CloudSpawner cloudSpawner;
+        private NestMultiplier nest;
 
         private readonly List<Toast> toasts = new List<Toast>();
         private readonly List<PositionedToast> pickupToasts = new List<PositionedToast>();
@@ -66,6 +67,11 @@ namespace FlyingChick
         public void BindDayCycle(DayCycle dayCycleRef)
         {
             dayCycle = dayCycleRef;
+        }
+
+        public void BindMeta(NestMultiplier nestRef)
+        {
+            nest = nestRef;
         }
 
         public void BindCollectibles(CoinSpawner coinSpawnerRef, CloudSpawner cloudSpawnerRef, Camera camera)
@@ -146,13 +152,16 @@ namespace FlyingChick
 
             DrawStreakPanel();
             if (fever.IsActive) DrawFeverBadge();
+            if (nest != null) DrawNestPanel();
             DrawToasts();
             DrawPickupToasts();
 
             var dbgStyle = new GUIStyle(GUI.skin.label) { fontSize = 14 };
             dbgStyle.normal.textColor = new Color(1f, 1f, 1f, 0.75f);
             string state = bird.OnGround ? "Grounded" : bird.Airborne ? "Airborne" : "Falling";
-            GUI.Label(new Rect(Screen.width - 220, Screen.height - 30, 220, 20), $"{state}  spd {bird.Speed:0}{(bird.IsDiving ? "  DIVE" : "")}", dbgStyle);
+            GUI.Label(new Rect(Screen.width - 220, Screen.height - 50, 220, 20), $"{state}  spd {bird.Speed:0}{(bird.IsDiving ? "  DIVE" : "")}", dbgStyle);
+            if (cam != null)
+                GUI.Label(new Rect(Screen.width - 220, Screen.height - 30, 220, 20), $"height {bird.HeightAboveGround:0}  zoom {cam.orthographicSize:0}", dbgStyle);
         }
 
         private void DrawDayClock()
@@ -192,6 +201,33 @@ namespace FlyingChick
                 bool lit = slideJudge.SlideStreak > i || fever.IsActive;
                 var dotRect = new Rect(panelRect.x + 10f + i * 34f, panelRect.y + 28f, 26f, 26f);
                 DrawRect(dotRect, lit ? new Color(1f, 0.85f, 0.25f) : new Color(1f, 1f, 1f, 0.25f));
+            }
+        }
+
+        private void DrawNestPanel()
+        {
+            var missions = nest.ActiveMissions;
+            if (missions.Length == 0) return;
+
+            const float panelW = 230f;
+            float panelH = 22f + missions.Length * 20f;
+            var panelRect = new Rect(20f, 66f, panelW, panelH);
+            DrawRect(panelRect, new Color(0f, 0f, 0f, 0.3f));
+
+            var headerStyle = new GUIStyle(GUI.skin.label) { fontSize = 13, fontStyle = FontStyle.Bold };
+            headerStyle.normal.textColor = new Color(1f, 0.85f, 0.4f);
+            GUI.Label(new Rect(panelRect.x + 8f, panelRect.y + 2f, panelW - 16f, 18f), $"Nest 목표 (+{nest.Bonus} 배수)", headerStyle);
+
+            var lineStyle = new GUIStyle(GUI.skin.label) { fontSize = 12 };
+            float y = panelRect.y + 20f;
+            foreach (var mission in missions)
+            {
+                float progress = nest.GetProgress(mission);
+                bool done = progress >= mission.Target;
+                lineStyle.normal.textColor = done ? new Color(0.6f, 1f, 0.6f) : new Color(1f, 1f, 1f, 0.85f);
+                string mark = done ? "✓" : $"{Mathf.Min(progress, mission.Target):0}/{mission.Target}";
+                GUI.Label(new Rect(panelRect.x + 8f, y, panelW - 16f, 18f), $"{mission.Description} ({mark})", lineStyle);
+                y += 20f;
             }
         }
 

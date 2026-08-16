@@ -31,13 +31,24 @@ namespace FlyingChick
         // ScreenSpace conversion off of Transform.position.
         public float CanvasX => physics.CanvasX;
         public float CanvasY => physics.CanvasY;
+        // Positive when airborne above the terrain directly below the bird;
+        // 0 (or negative mid-collision-snap) when grounded. Drives CameraZoom.
+        public float HeightAboveGround { get; private set; }
 
         private BirdPhysics physics;
         private Camera cam;
+        private BirdCollection collection;
 
         public void Configure(Camera camera)
         {
             cam = camera;
+        }
+
+        // Wired once BirdCollection exists (M6); applies StartSpeedBonus
+        // perk on every ResetForNewRun from then on.
+        public void SetCollection(BirdCollection collectionRef)
+        {
+            collection = collectionRef;
         }
 
         private void Start()
@@ -63,6 +74,10 @@ namespace FlyingChick
 
             physics = new BirdPhysics(canvasStartX, radius, gm.Ground);
             physics.Reset(gm.ScrollX);
+
+            if (collection != null && collection.SelectedBird.Perk == PerkType.StartSpeedBonus)
+                physics.AddSpeed(collection.SelectedBird.PerkValue);
+
             ApplyTransform();
         }
 
@@ -79,12 +94,18 @@ namespace FlyingChick
 
             float dt = Time.fixedDeltaTime;
             bool holding = InputService.IsPointerHeld();
+            float scrollXBeforeAdvance = gm.ScrollX;
 
-            physics.Step(dt, gm.ScrollX, holding);
+            physics.Step(dt, scrollXBeforeAdvance, holding);
             gm.AdvanceScroll(physics.Speed * dt);
 
             if (physics.JustLandedGreatSlide) OnGreatSlideLanding?.Invoke();
             if (physics.JustLandedMiss) OnMissedLanding?.Invoke();
+
+            // Use the SAME scrollX that physics.Step() just used -- physics.CanvasY
+            // corresponds to that x, not to gm.ScrollX after AdvanceScroll shifted it.
+            float worldBirdX = scrollXBeforeAdvance + physics.CanvasX;
+            HeightAboveGround = gm.Ground.GroundY(worldBirdX) - physics.CanvasY;
 
             ApplyTransform();
         }

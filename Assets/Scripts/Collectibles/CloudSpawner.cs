@@ -14,6 +14,8 @@ namespace FlyingChick
         [SerializeField] private float baseCloudScore = 20f;
 
         public event Action<Vector3, string, Color> OnPickupPopup;
+        // Clean domain event (no visual payload) for DailyMissions/stats.
+        public event Action OnCloudTouched;
 
         // Day Over stat.
         public int TouchCount { get; private set; }
@@ -87,11 +89,14 @@ namespace FlyingChick
         private void LateUpdate()
         {
             var gm = GameManager.Instance;
-            float width = ScreenSpace.ViewWidth(gm.ViewHeight, cam.aspect);
-            field.EnsureCoverage(gm.ScrollX + width * 1.5f);
+            // Zoom-aware bounds (see ScreenSpace.LeftEdgeCanvasX comment) --
+            // CameraZoom (M7) can widen the visible range beyond baseline.
+            float leftEdge = ScreenSpace.LeftEdgeCanvasX(gm.ViewHeight, cam.aspect, cam.orthographicSize);
+            float rightEdge = ScreenSpace.RightEdgeCanvasX(gm.ViewHeight, cam.aspect, cam.orthographicSize);
+            field.EnsureCoverage(gm.ScrollX + rightEdge + (rightEdge - leftEdge) * 0.5f);
 
             CheckTouches(gm);
-            RenderVisible(gm, width);
+            RenderVisible(gm, leftEdge, rightEdge);
         }
 
         private void CheckTouches(GameManager gm)
@@ -118,10 +123,11 @@ namespace FlyingChick
                 Vector3 worldPos = ToWorldPos(gm, canvasX, e.CanvasY);
                 burst.Burst(worldPos, Color.white, 20);
                 OnPickupPopup?.Invoke(worldPos, $"CLOUD TOUCH! +{Mathf.RoundToInt(gain):0}", new Color(0.6f, 0.4f, 1f));
+                OnCloudTouched?.Invoke();
             }
         }
 
-        private void RenderVisible(GameManager gm, float width)
+        private void RenderVisible(GameManager gm, float leftEdge, float rightEdge)
         {
             int used = 0;
             var entries = field.Entries;
@@ -130,7 +136,7 @@ namespace FlyingChick
             {
                 var e = entries[i];
                 float canvasX = e.WorldX - gm.ScrollX;
-                if (canvasX < -140f || canvasX > width + 140f) continue;
+                if (canvasX < leftEdge - 140f || canvasX > rightEdge + 140f) continue;
 
                 var t = pool[used++];
                 t.gameObject.SetActive(true);

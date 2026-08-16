@@ -1,3 +1,4 @@
+using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace FlyingChick
@@ -25,6 +26,19 @@ namespace FlyingChick
             if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
                 return true;
             return Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame;
+        }
+
+        // Unity screen space (origin bottom-left, y-up). Used by StartScreen
+        // (M6) to tell a "start the run" tap from a tap on a UI button --
+        // OnGUI's Rect space is y-down, so callers need
+        // (pos.x, Screen.height - pos.y) to compare against a GUI Rect.
+        public static Vector2 PointerPosition()
+        {
+            if (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.isPressed)
+                return Touchscreen.current.primaryTouch.position.ReadValue();
+            if (Mouse.current != null)
+                return Mouse.current.position.ReadValue();
+            return Vector2.zero;
         }
     }
 }

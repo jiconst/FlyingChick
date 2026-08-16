@@ -228,18 +228,132 @@ Transform에 적용). Rigidbody2D 사용 안 함, `BirdController.FixedUpdate`�
   게이팅(그 외 상태에서는 Start/DayOver 화면이 대신 그려짐)
 - **M4에서 안 한 것**: Day Over 화면의 코인 카운트업 애니메이션 (M6/M7 비주얼 폴리시)
 
-## 5단계 — 메타 시스템 — 🔲 M5
+## 5단계 — 메타 시스템 — ✅ M5+M6 구현 완료
 
-- 코인 지갑/저장 (`JsonUtility` + `Application.persistentDataPath`, 최고점수는 이미 M4에서
-  `SaveSystem`으로 구현됨 — 여기선 그 위에 코인/새/미션 데이터 확장)
-- 데일리 미션 3개/일, 각 100코인, 날짜 변경 시 리셋
-- 새 컬렉션/가챠 (알 500코인, `BirdData` ScriptableObject, Perk 1개씩)
-- 로컬 리더보드 Top 10 + 누적 통계
+### 저장 구조 (`Meta/SaveData.cs`, `Meta/SaveSystem.cs`)
+- 최고점수: M4부터 그대로 `PlayerPrefs` (스펙: "PlayerPrefs는 최고점수만")
+- 그 외 전부(코인, Nest 배수 보너스, 데일리 미션 날짜/진행/완료): `JsonUtility` +
+  `Application.persistentDataPath`의 `flyingchick_save.json` 한 파일. `SaveSystem`은
+  직렬화/파일 I/O만 담당하고 게임 로직은 전혀 모름 — `CoinWallet`/`NestMultiplier`/
+  `DailyMissions`가 `SaveSystem.Instance.Data`를 직접 읽고 쓴 뒤 `Save()` 호출
+- **ScriptableObject 대신 일반 C# 데이터**(`Meta/MissionPool.cs`, `Meta/BirdPool.cs`)로
+  미션/새 풀을 정의함. 이 프로젝트는 지금까지 완전히 코드로만 조립돼서(에디터에서 수동
+  설정 없이 Play만 누르면 됨) 되어 있는데, `.asset` 파일을 에디터 없이 손으로 만드는 건
+  깨지기 쉬워서 이번엔 스펙(ScriptableObject)과 다르게 갔음. 나중에 실제 에디터 콘텐츠
+  제작 워크플로가 생기면 ScriptableObject로 바꾸는 게 좋음
 
-## 6단계 — 비주얼 & 폴리시 — 🔲 M6~M7
+### 코인 지갑 (`Meta/CoinWallet.cs`)
+- `GameManager.OnRunEnd`(day-over 직전, 스탯이 아직 살아있는 시점)를 구독해서 자동으로
+  코인 지급 — 다른 시스템이 명시적으로 호출할 필요 없음
+- **점수→코인 환산 비율은 발명한 값** (`flying-chick.html`엔 메타 레이어 자체가 없어서
+  참고할 원본이 없음): `score / 50` 내림. `CoinWallet.scoreToCoinsRatio` 하나로 조절
 
-- 파티클 풀링(다이브 먼지/획득 버스트/Fever 별 트레일), 팝업 텍스트, 팔레트 전환 트윈,
-  사운드 훅
+### Nest Multiplier (`Meta/NestMultiplier.cs`)
+- 매 런(`OnRunStart`)마다 `MissionPool.Nest`(5개 후보) 중 3개를 무작위로 뽑음
+- 진행 상황을 별도로 누적 추적하지 않고, **`OnRunEnd` 시점에 그 런의 살아있는 통계
+  (`SlideJudge.TotalSlides`, `FeverSystem.LongestDuration`, `CloudSpawner.TouchCount`,
+  `ScoreManager.Score`, `GameManager.Island`)를 그대로 조회**해서 통과 여부 판정 — 이 값들이
+  이미 다 실시간으로 관리되고 있어서 추가 상태가 필요 없음
+- 3개 전부 통과 시 `GameManager.NestBonus` +1 영구 상승 + 저장. `Multiplier` 공식이
+  `10 + NestBonus + (Island-1)*2`로 바뀜 (기존 `10 + (Island-1)*2`에서 확장)
+- **스펙에서 단순화한 부분**: 원본 예시 목표 중 "1번 섬에서 5000점"(특정 섬으로 범위를
+  좁힌 점수)은 점수 서브토탈을 섬별로 추적하는 새 상태가 필요해서, 그냥 "이번 런에서
+  5000점 획득"으로 단순화함
+- 플레이 중 HUD 좌측에 이번 런의 목표 3개 + 실시간 진행 상황이 항상 보임 (스펙은 "런 시작
+  전 제시"였지만, 목표는 `BeginRun()` 시점에 뽑히므로 시작 전엔 아직 없음 — 대신 플레이
+  내내 보이도록 해서 "뭘 해야 하는지 모른 채 끝남" 문제는 없앰). Day Over 화면에서 각
+  목표 통과(✓)/실패(✗) 결과 확인 가능
+
+### 데일리 미션 (`Meta/DailyMissions.cs`)
+- 매일(`DateTime.Today` 기준) `MissionPool.Daily`(5개 후보) 중 3개를 뽑음 — 날짜 문자열을
+  시드로 써서, 같은 날 앱을 껐다 켜도 같은 3개가 나옴
+- **런 하나로는 안 끝나고 하루 동안 여러 런에 걸쳐 누적** — Nest Multiplier와 다른 점.
+  진행 상황은 매번 즉시 저장되므로 앱을 종료해도 유지됨
+- 관련 이벤트를 구독해서 진행 카운트: `SlideJudge.OnGreatSlide`, `FeverSystem.OnFeverStart`,
+  `CoinSpawner.OnCoinCollected`(신규 — 팝업 텍스트용 이벤트와 분리된 순수 도메인 이벤트),
+  `CloudSpawner.OnCloudTouched`(신규, 같은 이유). "섬 도달"류는 누적이 아니라 그날 최고
+  기록으로 추적(`SetBest`)
+- 완료 시 코인 100개 즉시 지급, 시작 화면 좌하단 패널에 진행 상황 표시
+
+### 새 컬렉션 / 알 가챠 (`Meta/BirdPool.cs`, `Meta/BirdCollection.cs`)
+- `BirdPool.All`에 5마리 정의 (기본 노랑 병아리는 무료로 처음부터 보유, 나머지 4마리는
+  각각 고유 Perk 보유): 빨강(슬라이드 점수 +10%), 파랑(Fever 지속시간 +1초), 초록(코인
+  획득 범위 +20), 보라(시작 속도 +50)
+- 알 구매 500코인 → 아직 안 가진 새 중 무작위 하나 부화 (`BirdCollection.BuyEgg()`). 전부
+  모았으면 구매 비활성화. 코인 부족하면 그냥 아무 일도 안 일어남(차감 안 됨)
+- **Perk 적용 방식**: `BirdCollection`은 어떤 시스템에도 직접 로직을 넣지 않고, 영향받는
+  시스템(`SlideJudge`, `FeverSystem`, `CoinSpawner`, `BirdController`)이 각자
+  `SetCollection(BirdCollection)`으로 참조를 받아서 자기 계산에 반영 — 예를 들어
+  `SlideJudge`는 점수 계산 시 `collection.SelectedBird.Perk == SlideScoreBonus`면 배율을
+  곱함. `BirdCollection`은 "지금 선택된 새가 뭔지"만 알고 있음
+- `BirdVisual`도 `SetCollection`을 받아서 선택된 새가 바뀌면(`OnSelectionChanged`) 몸통/배/
+  날개 색을 다시 그림 (부리·볏·눈은 모든 새 공통이라 안 바뀜)
+- 홈 화면(`UI/StartScreen.cs`) 하단에 보유 새 아이콘 줄 — 클릭하면 선택, 안 가진 새는
+  회색 "?"로 표시, 선택된 새는 흰 테두리. 알 구매 버튼과 부화 결과 토스트도 여기 있음
+
+### 로컬 리더보드/통계 (`Meta/Leaderboard.cs`)
+- `GameManager.OnRunEnd`마다 이번 점수를 Top 10에 삽입(정렬), 총 슬라이드/총 런 수(=스펙의
+  "총 비행일 수", 하루 사이클 하나 = 하루) 누적. 전부 저장됨
+- 홈 화면 우상단 "기록 보기" 버튼으로 토글되는 패널에서 확인 가능
+
+### 홈 화면 클릭과 "탭하면 시작" 겹침 버그 주의
+- `StartScreen`은 원래 "아무 데나 탭하면 시작"이었는데, 새 아이콘/알 구매/기록 버튼이
+  생기면서 그 버튼들을 누른 탭까지 게임을 시작시켜버리는 문제가 생길 뻔함. 이 버튼들의
+  Rect를 `IsBlockingClick()`으로 따로 체크해서, 그 영역 안에서의 탭은 런 시작을 막도록
+  처리함 (`InputService.PointerPosition()` 신규 추가 — Update()의 New Input System 체크와
+  OnGUI의 IMGUI Rect를 좌표계 맞춰 비교)
+
+### UI
+- **`UI/StartScreen.cs`**: 우상단 코인 총액 + 기록 버튼, 좌하단 오늘의 미션 패널, 하단 새
+  선택 줄 + 알 구매 버튼
+- **`UI/DayOverScreen.cs`**: 이번 런 획득 코인 + 누적 코인 총액, Nest 목표 3개 통과/실패
+- **`UI/HUD.cs`**: 플레이 중 좌측에 이번 런 Nest 목표 패널(실시간 진행)
+
+## 6단계 — 비주얼 & 폴리시 — 🚧 M7 진행 중
+
+이미 된 것: 획득 파티클 버스트(`FX/PickupBurst.cs`, M3), 팝업 텍스트(`UI/HUD.cs`의 토스트,
+M3), **카메라 줌**(`FX/CameraZoom.cs`, 아래 상세). 남은 것:
+- 다이브 먼지, Fever 별 트레일 파티클
+- 하늘 그라데이션/태양·달/별 (지금은 `FX/SkyTint.cs`의 단색 lerp만)
+- 섬별 10색 팔레트 전환 (지금은 언덕 3색 그라데이션 고정)
+- 사운드 훅 (점프/버튼 SFX, BGM, 점수 획득 효과음 — 아직 오디오 자체가 전혀 없음)
+- OnGUI를 실제 UI(Canvas/TMP 또는 UI Toolkit)로 교체
+- 성능 프로파일링
+
+### 카메라 줌 (`FX/CameraZoom.cs`)
+- 원래 스펙(1단계에서 미룬 항목)은 "최대 뷰포트 15% 줌아웃"이었는데, **"병아리가 화면
+  밖으로 사라지면 안 된다"는 요청으로 방식을 바꿈** — 고정 퍼센트 상한 대신, 병아리의
+  실제 월드 Y 위치가 항상 카메라 시야 안(`[-orthographicSize, +orthographicSize]`,
+  카메라가 Y=0 고정이므로)에 들어오도록 **필요한 만큼** 줌아웃함
+  - `neededHalfHeight = max(baseOrthoSize, |birdY| + margin)`, 안전장치로
+    `baseOrthoSize * 4`를 절대 상한으로 둠 (물리 버그로 비정상적으로 높이 튀는 경우 대비용,
+    평소 게임플레이에서 걸릴 일은 없음)
+  - 줌아웃/줌인 스무딩 시간을 다르게 줌 (`zoomOutSmoothTime=0.12`로 빠르게 따라잡고,
+    `zoomInSmoothTime=0.35`로 천천히 복귀) — 급상승엔 즉각 반응하되 복귀는 부드럽게
+- **카메라는 여전히 `transform.position`을 절대 안 움직임** — `orthographicSize`만 바뀜
+  (프로젝트 전체가 "카메라 고정 + 월드가 스크롤" 모델이라 위치는 M1부터 고정 원칙 유지)
+
+**첫 구현(고정 임계값 방식)에서 줌이 거의 안 보였던 이유 (지금은 해당 없음, 기록만
+남김)**: `BirdController.FixedUpdate`에서 `HeightAboveGround`를 `gm.AdvanceScroll()`
+호출 이후의 `gm.ScrollX`로 계산해서, 그 프레임의 `physics.CanvasY`(스크롤 전 X 기준)와
+다른 지점을 비교하던 진짜 버그가 하나 있었고(`scrollXBeforeAdvance`로 수정), 임계값
+자체도 이 게임의 실제 물리 스케일보다 너무 높게 잡혀 있었음. 지금 방식은 임계값이 아예
+없어서(병아리 위치를 직접 기준으로 삼음) 이 클래스의 튜닝 문제 자체가 구조적으로
+사라졌지만, 버그 수정은 `HeightAboveGround`가 다른 곳(HUD 디버그 표시 등)에서도 쓰이므로
+그대로 유효함
+- 검증용으로 `UI/HUD.cs` 우하단 디버그 텍스트에 `height`/`zoom` 실수치를 항상 표시함
+
+### 줌 도입하면서 같이 고친 것 — 화면 가장자리 빈 공간 버그
+- `TerrainGenerator`/`CoinSpawner`/`CloudSpawner`는 전부 "기준 줌(orthographicSize =
+  viewHeight/2)일 때의 화면 폭"(`ScreenSpace.ViewWidth`)만큼만 지형을 그리고 코인/구름을
+  생성/컬링하고 있었음. 줌아웃하면 실제 보이는 영역이 더 넓어지는데 그 계산은 그대로라서,
+  화면 가장자리에 지형이 안 그려지는 빈 공간이 생길 뻔했음
+- **카메라가 한 위치에 고정돼 있으므로, 줌아웃은 좌우로 "대칭"으로 더 넓게 보여줌** — 오른쪽
+  뿐 아니라 왼쪽으로도 기존에 안 그리던 영역이 필요함. `ScreenSpace.LeftEdgeCanvasX`/
+  `RightEdgeCanvasX`(신규)가 현재 `orthographicSize` 기준으로 실제 좌/우 경계를
+  캔버스좌표로 계산해줌 — 세 스크립트 전부 이걸로 교체
+- `BirdController`의 새 시작 X 위치(`width*0.28`) 계산은 **그대로 기준 폭 사용** — 이건
+  줌과 무관하게 "화면의 28% 지점"이라는 고정 디자인값이라 안 바꿈
 
 ## 구현 우선순위 / 진행 상황
 
@@ -252,10 +366,17 @@ Transform에 적용). Rigidbody2D 사용 안 함, `BirdController.FixedUpdate`�
    ParticleSystem) + 월드 좌표 팝업 텍스트. 플레이 확인 완료 (스피드코인 배치 높이 재조정
    포함).
 4. **M4 — 게임 루프**: ✅ 완료 (2026-08-17). Start/Playing/DayOver 상태 머신, 낮/밤 타이머 +
-   하늘색 lerp, 시작/Day Over 화면, 최고점수 저장. **여기서 플레이 확인 후 M5 진행.**
-5. **M5 — 메타**: 🔲 다음 작업. 코인 지갑, 데일리 미션, Nest Multiplier
-6. **M6 — 컬렉션**: 🔲 새 가챠/Perk, 홈 화면 새 선택, 로컬 리더보드
-7. **M7 — 폴리시**: 🔲 팔레트 전환 트윈, 사운드 훅, 성능 프로파일링
+   하늘색 lerp, 시작/Day Over 화면, 최고점수 저장. 플레이 확인 완료 (진행바 색/해 아이콘
+   튜닝 포함).
+5. **M5 — 메타**: ✅ 구현 완료 (2026-08-17). 코인 지갑(JSON 저장), 데일리 미션(하루 누적,
+   `DailyMissions`), Nest Multiplier(런당 3목표 → 영구 배수 보너스, `NestMultiplier`).
+   **플레이 확인은 아직 안 됨** — M6 요청이 바로 이어져서 건너뜀.
+6. **M6 — 컬렉션**: ✅ 구현 완료 (2026-08-17). 새 5종 + Perk(`BirdPool`/`BirdCollection`), 알
+   가챠(500코인), 홈 화면 새 선택 줄, 로컬 Top 10 리더보드(`Leaderboard`). **여기서 M5+M6
+   둘 다 플레이 확인 필요 — 확인 후 M7 진행.**
+7. **M7 — 폴리시**: 🚧 진행 중. 카메라 줌(높이 비례 줌아웃, `FX/CameraZoom.cs`) 완료 —
+   **플레이 확인 필요**. 남은 것: 파티클(다이브 먼지/Fever 별 트레일), 하늘/팔레트 비주얼,
+   사운드, OnGUI→실제 UI 교체, 성능 프로파일링
 
 ## 하지 말 것
 
@@ -276,30 +397,49 @@ Transform에 적용). Rigidbody2D 사용 안 함, `BirdController.FixedUpdate`�
 - [x] streak 3 → Fever 발동, 실패 착지 → 즉시 종료 확인 (M2)
 - [x] 섬 전환 시 배수/속도킥 동작, HUD의 Island/배수/점수/Fever뱃지/streak 점이 맞는지 (M2)
 - [x] 코인/스피드코인/구름 픽업이 실제로 닿는 높이에 배치되는지 (M3)
-- [ ] 90초 후 Day Over, 재시작 시 상태 완전 초기화(점수/streak/Fever/코인·구름/지형까지
-      전부 새로 시작하는지) — M4, 플레이 확인 대기 중
-- [ ] Day Over에서 "홈" → 시작 화면 → 다시 시작이 정상 동작하는지 (M4)
-- [ ] 앱 재시작 후에도 Best 점수가 유지되는지 (M4 — Unity 에디터에서는 PlayerPrefs가
-      레지스트리/plist에 저장되므로, 에디터를 껐다 켜도 유지되면 정상)
+- [x] 90초 후 Day Over, 재시작 시 상태 완전 초기화(점수/streak/Fever/코인·구름/지형까지
+      전부 새로 시작하는지) (M4)
+- [x] Day Over에서 "홈" → 시작 화면 → 다시 시작이 정상 동작하는지 (M4)
+- [x] 앱 재시작 후에도 Best 점수가 유지되는지 (M4)
+- [ ] 코인이 Day Over에서 실제로 지급되고 시작 화면 총액에 반영되는지 (M5, 플레이 확인
+      대기 중)
+- [ ] Nest 목표 3개가 런마다 새로 뽑히고, 플레이 중 HUD·Day Over에서 진행/결과가 맞는지,
+      3개 전부 통과했을 때 다음 런부터 배수가 실제로 +1 되는지 (M5)
+- [ ] 데일리 미션이 여러 런에 걸쳐 누적되고, 완료 시 코인 100개 지급되는지 (M5)
+- [ ] 앱을 껐다 켜도(같은 날) 데일리 미션 진행/코인/Nest 배수가 유지되는지 (M5 — JSON
+      저장이라 `Application.persistentDataPath`의 `flyingchick_save.json` 확인 가능)
+- [ ] 홈 화면 새 아이콘 클릭 시 선택되고(흰 테두리), 실제 플레이에 그 새 색상이 반영되는지
+      (M6)
+- [ ] 알 구매(500코인) 시 코인이 차감되고, 못 가진 새 중 하나가 무작위로 부화하는지, 코인
+      부족할 땐 아무 일도 안 일어나는지 (M6)
+- [ ] 각 새의 Perk가 실제로 게임플레이에 반영되는지 (빨강=슬라이드 점수 +10%, 파랑=Fever
+      +1초, 초록=코인 반경 +20, 보라=시작 속도 +50) (M6)
+- [ ] **홈 화면에서 새 아이콘/알 구매/기록 버튼을 눌렀을 때 실수로 게임이 시작되지 않는지**
+      (버튼 영역 클릭 차단 로직, M6 — 가장 깨지기 쉬운 부분이라 꼭 확인)
+- [ ] "기록 보기" 패널에 Top 10 점수, 총 슬라이드, 총 비행일 수가 맞는지, 여러 런 이후
+      순위가 정렬되는지 (M6)
 - [ ] 60fps 유지
-- [ ] 앱 재시작 후 코인 지갑/미션 등 저장 데이터 유지 (M5, 아직 해당 데이터 없음)
 
 ## 실행 방법
 
 빈 GameObject에 `GameBootstrapper` 컴포넌트만 붙이고 Play — 카메라/지형/새/점수 시스템/HUD/
 낮밤 사이클/시작·종료 화면이 전부 런타임에 코드로 조립된다.
 
-1. **시작 화면**: 타이틀 + Best 점수(있으면). 아무데나 터치/클릭하거나 스페이스바 누르면 시작
+1. **시작 화면**: 타이틀 + Best 점수, 우상단 코인 총액 + "기록 보기" 버튼(Top 10 + 누적
+   통계 패널 토글), 좌하단 오늘의 미션 패널, 하단 보유 새 선택 줄(클릭해서 선택) + 알
+   구매 버튼(500코인, 부화 결과 토스트 표시). **이 버튼들이 아닌 빈 곳**을 터치/클릭하거나
+   스페이스바를 누르면 시작
 2. **플레이 중**: 마우스 클릭/터치/스페이스바를 내리막에서 누르고 있으면 가속. 좌상단 점수,
-   우상단 Island·배수 + 낮 진행바, 좌하단 "STREAK n/3" 라벨 + 점 3개, 화면 중앙 상단(Fever
-   중이면) 펄스하는 분홍 FEVER 뱃지, 중앙에 SLIDE!/GREAT SLIDE/STREAK RESET/FEVER! 토스트가
-   잠깐 떴다 사라짐. 노란 코인/파란 스피드코인이 지형 위에, 하늘엔 흰 뭉게구름(공중에서
-   닿으면 터치 인정)이 흘러감 — 먹을 때마다 파티클 버스트 + 작은 팝업 텍스트(+3/SPEED!/
-   CLOUD TOUCH!). 하늘색이 90초에 걸쳐 낮→노을→밤으로 서서히 변함. 우하단 작은 회색
-   텍스트는 물리 디버그용(속도/상태/다이빙 여부)
+   우상단 Island·배수 + 낮 진행바, 좌하단 "STREAK n/3" 라벨 + 점 3개, 좌측에 이번 런 Nest
+   목표 3개 + 진행률, 화면 중앙 상단(Fever 중이면) 펄스하는 분홍 FEVER 뱃지, 중앙에
+   SLIDE!/GREAT SLIDE/STREAK RESET/FEVER! 토스트가 잠깐 떴다 사라짐. 노란 코인/파란
+   스피드코인이 지형 위에, 하늘엔 흰 뭉게구름(공중에서 닿으면 터치 인정)이 흘러감 — 먹을
+   때마다 파티클 버스트 + 작은 팝업 텍스트(+3/SPEED!/CLOUD TOUCH!). 하늘색이 90초에 걸쳐
+   낮→노을→밤으로 서서히 변함. 우하단 작은 회색 텍스트는 물리 디버그용(속도/상태/다이빙
+   여부)
 3. **90초 경과(밤이 되면)**: Day Over 화면 — 최종 점수/Island/Great Slides/Cloud Touches/
-   Longest Fever + Best, New Highscore 표시(경신 시), "다시하기"(새 지형으로 바로 재시작)/
-   "홈"(시작 화면으로)
+   Longest Fever + Best, 이번 런 획득 코인 + 누적 코인, Nest 목표 3개 통과/실패, New
+   Highscore 표시(경신 시), "다시하기"(새 지형으로 바로 재시작)/"홈"(시작 화면으로)
 
 ## 이전 세션 기록 (재발 방지용)
 

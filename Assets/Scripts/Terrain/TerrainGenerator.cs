@@ -43,8 +43,13 @@ namespace FlyingChick
             var gm = GameManager.Instance;
             var ground = gm.Ground;
             float viewHeight = gm.ViewHeight;
-            float width = ScreenSpace.ViewWidth(viewHeight, cam.aspect);
-            int steps = Mathf.Max(2, Mathf.CeilToInt(width / sampleStep) + 1);
+
+            // Sample the actual on-screen range at the CURRENT zoom, not the
+            // baseline [0, ViewWidth] -- otherwise CameraZoom's zoom-out
+            // leaves blank gaps at the edges (see ScreenSpace comment).
+            float leftEdge = ScreenSpace.LeftEdgeCanvasX(viewHeight, cam.aspect, cam.orthographicSize);
+            float rightEdge = ScreenSpace.RightEdgeCanvasX(viewHeight, cam.aspect, cam.orthographicSize);
+            int steps = Mathf.Max(2, Mathf.CeilToInt((rightEdge - leftEdge) / sampleStep) + 1);
 
             var vertices = new Vector3[steps * 2];
             var colors = new Color[steps * 2];
@@ -54,7 +59,7 @@ namespace FlyingChick
 
             for (int i = 0; i < steps; i++)
             {
-                float canvasX = i * sampleStep;
+                float canvasX = leftEdge + i * sampleStep;
                 float worldX = gm.ScrollX + canvasX;
                 float canvasY = ground.GroundY(worldX);
 

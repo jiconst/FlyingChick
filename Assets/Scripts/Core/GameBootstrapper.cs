@@ -3,9 +3,10 @@ using UnityEngine;
 namespace FlyingChick
 {
     // Wires the current milestone slice together at runtime so Play works
-    // with zero manual scene setup. The camera stays completely fixed for
-    // the whole run -- the reference scrolls the world via ScrollX, not the
-    // bird/camera through world space.
+    // with zero manual scene setup. The camera's POSITION stays completely
+    // fixed for the whole run -- the reference scrolls the world via
+    // ScrollX, not the bird/camera through world space. Its orthographicSize
+    // (zoom) can change though, see CameraZoom (M7).
     //
     // M1: terrain + bird physics + input.
     // M2 (added): Great Slide streak judging, Fever, island progression
@@ -13,6 +14,11 @@ namespace FlyingChick
     // M3 (added): coins, speed coins, clouds, pickup particle bursts + popups.
     // M4 (added): Start/Playing/DayOver state machine, day-length timer +
     // sky tint, Start/DayOver screens, best-score save.
+    // M5 (added): coin wallet, Nest Multiplier (per-run objectives ->
+    // permanent starting-multiplier bonus), daily missions.
+    // M6 (added): bird collection/egg gacha with perks, home-screen bird
+    // selection, local Top-10 leaderboard + lifetime stats.
+    // M7 (added so far): camera zoom-out while high above the ground.
     public class GameBootstrapper : MonoBehaviour
     {
         [SerializeField] private float viewHeight = 720f;
@@ -33,6 +39,12 @@ namespace FlyingChick
             cam.backgroundColor = new Color(0.98f, 0.97f, 0.85f);
             cam.clearFlags = CameraClearFlags.SolidColor;
 
+            // SaveSystem first: CoinWallet/BirdCollection/Leaderboard read
+            // SaveSystem.Instance in their own Awake/Configure, so it must
+            // exist before them.
+            var saveGO = new GameObject("SaveSystem");
+            saveGO.AddComponent<SaveSystem>();
+
             int seed = terrainSeed != 0 ? terrainSeed : UnityEngine.Random.Range(1, int.MaxValue);
             var gmGO = new GameObject("GameManager");
             var gm = gmGO.AddComponent<GameManager>();
@@ -43,8 +55,12 @@ namespace FlyingChick
 
             var birdGO = new GameObject("Bird");
             var bird = birdGO.AddComponent<BirdController>();
-            birdGO.AddComponent<BirdVisual>();
+            var birdVisual = birdGO.AddComponent<BirdVisual>();
             bird.Configure(cam);
+
+            var zoomGO = new GameObject("CameraZoom");
+            var cameraZoom = zoomGO.AddComponent<CameraZoom>();
+            cameraZoom.Configure(cam, bird);
 
             var feverGO = new GameObject("FeverSystem");
             var fever = feverGO.AddComponent<FeverSystem>();
@@ -75,17 +91,43 @@ namespace FlyingChick
             var sky = skyGO.AddComponent<SkyTint>();
             sky.Configure(cam, dayCycle);
 
-            var saveGO = new GameObject("SaveSystem");
-            saveGO.AddComponent<SaveSystem>();
+            var walletGO = new GameObject("CoinWallet");
+            var wallet = walletGO.AddComponent<CoinWallet>();
+            wallet.Configure(gm, score);
+
+            var nestGO = new GameObject("NestMultiplier");
+            var nest = nestGO.AddComponent<NestMultiplier>();
+            nest.Configure(gm, slideJudge, fever, cloudSpawner, score);
+
+            var dailyGO = new GameObject("DailyMissions");
+            var dailyMissions = dailyGO.AddComponent<DailyMissions>();
+            dailyMissions.Configure(wallet, slideJudge, fever, coinSpawner, cloudSpawner, gm);
+
+            var collectionGO = new GameObject("BirdCollection");
+            var collection = collectionGO.AddComponent<BirdCollection>();
+            collection.Configure(wallet);
+
+            bird.SetCollection(collection);
+            birdVisual.SetCollection(collection);
+            slideJudge.SetCollection(collection);
+            fever.SetCollection(collection);
+            coinSpawner.SetCollection(collection);
+
+            var leaderboardGO = new GameObject("Leaderboard");
+            var leaderboard = leaderboardGO.AddComponent<Leaderboard>();
+            leaderboard.Configure(gm, score, slideJudge);
 
             var hud = gameObject.AddComponent<HUD>();
             hud.Bind(bird, score, slideJudge, fever, gm);
             hud.BindCollectibles(coinSpawner, cloudSpawner, cam);
             hud.BindDayCycle(dayCycle);
+            hud.BindMeta(nest);
 
-            gameObject.AddComponent<StartScreen>();
+            var startScreen = gameObject.AddComponent<StartScreen>();
+            startScreen.Bind(wallet, dailyMissions, collection, leaderboard);
+
             var dayOverScreen = gameObject.AddComponent<DayOverScreen>();
-            dayOverScreen.Bind(score, slideJudge, cloudSpawner, fever, gm);
+            dayOverScreen.Bind(score, slideJudge, cloudSpawner, fever, gm, wallet, nest);
         }
     }
 }
