@@ -39,10 +39,13 @@ namespace FlyingChick
 
                 if (roll < 0.10)
                 {
+                    // Reference offset (60-100) assumed taller hills/higher
+                    // launches than our current tuning reaches -- lowered so
+                    // it's actually catchable mid-flight.
                     entries.Add(new CoinEntry
                     {
                         WorldX = lastCoinX,
-                        Offset = 60f + (float)rng.NextDouble() * 40f,
+                        Offset = 28f + (float)rng.NextDouble() * 26f,
                         Type = CoinType.Speed
                     });
                 }
