@@ -3,60 +3,60 @@ using UnityEngine;
 
 namespace FlyingChick
 {
-    // Prototype-scope game state: a single day/night timer and a running
-    // score driven by the bird's great-slide/fever events. Coins, nests,
-    // islands, and localization are deliberately out of scope for this pass.
+    // Owns run-wide shared state that terrain, physics, and scoring all
+    // read/advance: how far the world has scrolled, which island we're on,
+    // and the reference viewport height the ported formulas are tuned
+    // against. Singleton per project convention (GameManager/ScoreManager/
+    // SaveSystem only).
+    //
+    // Island progression (M2): ported from the reference's inline
+    // islandDistance/ISLAND_LEN handling in update(). Day-cycle fields land
+    // in M4, not here.
     public class GameManager : MonoBehaviour
     {
-        [SerializeField] private BirdController bird;
-        [SerializeField] private float dayDurationSeconds = 90f;
-        [SerializeField] private int greatSlideScore = 10;
+        public static GameManager Instance { get; private set; }
 
-        public event Action OnDayOver;
+        private const float IslandLength = 2600f;
 
-        public float TimeRemaining { get; private set; }
-        public int Score { get; private set; }
-        public bool IsDayOver { get; private set; }
+        [SerializeField] private float viewHeight = 720f;
 
-        private float scoreMultiplier = 1f;
+        public float ViewHeight => viewHeight;
+        public float ScrollX { get; private set; }
+        public int Island { get; private set; } = 1;
+        public int Multiplier => 10 + (Island - 1) * 2;
 
-        public void Configure(BirdController birdRef, float dayDurationSecondsValue)
+        // Single shared terrain instance -- TerrainGenerator and BirdPhysics
+        // both query this so the rendered hill and the physics ground line
+        // never disagree (see the earlier island-desync bug for why this
+        // matters).
+        public GroundSampler Ground { get; private set; }
+
+        public event Action<int> OnIslandAdvanced;
+
+        private float islandDistance;
+
+        private void Awake()
         {
-            bird = birdRef;
-            dayDurationSeconds = dayDurationSecondsValue;
+            Instance = this;
         }
 
-        private void Start()
+        public void Configure(float viewHeightValue, int terrainSeed)
         {
-            TimeRemaining = dayDurationSeconds;
-            if (bird != null)
+            viewHeight = viewHeightValue;
+            Ground = new GroundSampler(terrainSeed, viewHeight);
+        }
+
+        public void AdvanceScroll(float delta)
+        {
+            ScrollX += delta;
+            islandDistance += delta;
+
+            if (islandDistance >= IslandLength)
             {
-                bird.OnGreatSlide += HandleGreatSlide;
-                bird.OnFeverStart += HandleFeverStart;
-                bird.OnFeverEnd += HandleFeverEnd;
+                islandDistance -= IslandLength;
+                Island++;
+                OnIslandAdvanced?.Invoke(Island);
             }
         }
-
-        private void Update()
-        {
-            if (IsDayOver) return;
-
-            TimeRemaining -= Time.deltaTime;
-            if (TimeRemaining <= 0f)
-            {
-                TimeRemaining = 0f;
-                IsDayOver = true;
-                if (bird != null) bird.ControlEnabled = false;
-                OnDayOver?.Invoke();
-            }
-        }
-
-        private void HandleGreatSlide()
-        {
-            Score += Mathf.RoundToInt(greatSlideScore * scoreMultiplier);
-        }
-
-        private void HandleFeverStart() => scoreMultiplier = 2f;
-        private void HandleFeverEnd() => scoreMultiplier = 1f;
     }
 }

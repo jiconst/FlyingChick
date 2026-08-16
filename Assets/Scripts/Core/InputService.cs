@@ -2,25 +2,29 @@ using UnityEngine.InputSystem;
 
 namespace FlyingChick
 {
-    // Minimal touch/mouse abstraction so gameplay code doesn't care which one
-    // is active. Uses the new Input System package (this project's Active
-    // Input Handling is set to "Input System Package", so the legacy
-    // UnityEngine.Input class is unavailable). Works with a touchscreen on
-    // device and falls back to the mouse in the Editor.
+    // Minimal touch/mouse/keyboard input abstraction using the new Input
+    // System package (this project's Active Input Handling is set to
+    // "Input System Package", so legacy UnityEngine.Input is unavailable).
+    // Spacebar is included per spec: desktop testing uses mouse click or
+    // space, mobile uses touch.
     public static class InputService
     {
         public static bool IsPointerHeld()
         {
             if (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.isPressed)
                 return true;
-            return Mouse.current != null && Mouse.current.leftButton.isPressed;
+            if (Mouse.current != null && Mouse.current.leftButton.isPressed)
+                return true;
+            return Keyboard.current != null && Keyboard.current.spaceKey.isPressed;
         }
 
         public static bool IsPointerDownThisFrame()
         {
             if (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame)
                 return true;
-            return Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame;
+            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+                return true;
+            return Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame;
         }
     }
 }

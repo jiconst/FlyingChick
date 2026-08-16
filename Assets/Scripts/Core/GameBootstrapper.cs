@@ -2,42 +2,22 @@ using UnityEngine;
 
 namespace FlyingChick
 {
-    // Drop this on an empty GameObject in an empty scene and press Play.
-    // It builds the terrain, bird, camera rig, and game manager entirely at
-    // runtime using generated placeholder art, so the core slide/glide feel
-    // can be tested without any manual scene setup or imported art assets.
+    // Wires the current milestone slice together at runtime so Play works
+    // with zero manual scene setup. The camera stays completely fixed for
+    // the whole run -- the reference scrolls the world via ScrollX, not the
+    // bird/camera through world space.
+    //
+    // M1: terrain + bird physics + input.
+    // M2 (added): Great Slide streak judging, Fever, island progression
+    // bonus/speed-kick (island logic itself lives in GameManager), score HUD.
+    // M3 (added): coins, speed coins, clouds, pickup particle bursts + popups.
     public class GameBootstrapper : MonoBehaviour
     {
-        [Header("Terrain")]
-        [SerializeField] private int terrainSeed = 12345;
-        [SerializeField] private float terrainTotalLength = 2000f;
-
-        [Header("Bird")]
-        [SerializeField] private float gravity = 20f;
-        [SerializeField] private float diveAcceleration = 18f;
-        [SerializeField] private float maxSpeed = 28f;
-        [SerializeField] private float startSpeed = 8f;
-
-        [Header("Day")]
-        [SerializeField] private float dayDurationSeconds = 90f;
+        [SerializeField] private float viewHeight = 720f;
+        [SerializeField] private int terrainSeed = 0; // 0 = random each run
 
         private void Start()
         {
-            var terrainGO = new GameObject("Terrain");
-            var terrain = terrainGO.AddComponent<TerrainGenerator>();
-            terrain.Configure(terrainSeed, terrainTotalLength);
-            terrain.Generate();
-
-            var birdGO = new GameObject("Bird");
-            var spriteRenderer = birdGO.AddComponent<SpriteRenderer>();
-            spriteRenderer.sprite = ProceduralSprite.CreateCircle(64, new Color(1f, 0.85f, 0.2f));
-            spriteRenderer.sortingOrder = 10;
-            birdGO.transform.localScale = Vector3.one * 0.5f;
-            birdGO.transform.position = new Vector3(0f, terrain.HeightAt(0f) + 1f, 0f);
-
-            var bird = birdGO.AddComponent<BirdController>();
-            bird.Configure(terrain, gravity, diveAcceleration, maxSpeed, startSpeed);
-
             var cam = Camera.main;
             if (cam == null)
             {
@@ -45,18 +25,50 @@ namespace FlyingChick
                 camGO.tag = "MainCamera";
                 cam = camGO.AddComponent<Camera>();
             }
-            cam.backgroundColor = new Color(0.55f, 0.8f, 0.95f);
+            cam.orthographic = true;
+            cam.orthographicSize = viewHeight * 0.5f;
+            cam.transform.position = new Vector3(0f, 0f, -10f);
+            cam.backgroundColor = new Color(0.98f, 0.97f, 0.85f);
             cam.clearFlags = CameraClearFlags.SolidColor;
 
-            var cameraRig = cam.gameObject.GetComponent<CameraRig>();
-            if (cameraRig == null) cameraRig = cam.gameObject.AddComponent<CameraRig>();
-            cameraRig.SetTarget(bird);
+            int seed = terrainSeed != 0 ? terrainSeed : UnityEngine.Random.Range(1, int.MaxValue);
+            var gmGO = new GameObject("GameManager");
+            var gm = gmGO.AddComponent<GameManager>();
+            gm.Configure(viewHeight, seed);
 
-            var gameManager = gameObject.AddComponent<GameManager>();
-            gameManager.Configure(bird, dayDurationSeconds);
+            var terrainGO = new GameObject("Terrain");
+            terrainGO.AddComponent<TerrainGenerator>();
 
-            var hud = gameObject.AddComponent<SimpleHud>();
-            hud.Bind(bird, gameManager);
+            var birdGO = new GameObject("Bird");
+            var bird = birdGO.AddComponent<BirdController>();
+            birdGO.AddComponent<BirdVisual>();
+            bird.Configure(cam);
+
+            var feverGO = new GameObject("FeverSystem");
+            var fever = feverGO.AddComponent<FeverSystem>();
+
+            var scoreGO = new GameObject("ScoreManager");
+            var score = scoreGO.AddComponent<ScoreManager>();
+            score.Configure(fever);
+
+            var judgeGO = new GameObject("SlideJudge");
+            var slideJudge = judgeGO.AddComponent<SlideJudge>();
+            slideJudge.Configure(bird, fever);
+
+            var burstGO = new GameObject("PickupBurst");
+            var burst = burstGO.AddComponent<PickupBurst>();
+
+            var coinGO = new GameObject("CoinSpawner");
+            var coinSpawner = coinGO.AddComponent<CoinSpawner>();
+            coinSpawner.Configure(bird, cam, burst, seed + 1);
+
+            var cloudGO = new GameObject("CloudSpawner");
+            var cloudSpawner = cloudGO.AddComponent<CloudSpawner>();
+            cloudSpawner.Configure(bird, cam, burst, seed + 2);
+
+            var hud = gameObject.AddComponent<HUD>();
+            hud.Bind(bird, score, slideJudge, fever, gm);
+            hud.BindCollectibles(coinSpawner, cloudSpawner, cam);
         }
     }
 }

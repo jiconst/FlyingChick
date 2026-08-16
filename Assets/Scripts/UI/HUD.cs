@@ -1,0 +1,235 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace FlyingChick
+{
+    // M2 scope: functional score/island/fever/streak readout via OnGUI --
+    // no Canvas/TMP yet, that's a later visual pass (M6/M7). Also carries a
+    // small physics debug line (was Debug/SimpleHud, now retired).
+    //
+    // Streak/fever feedback was reported hard to notice twice now. Boxes are
+    // drawn with a solid 1x1 texture + GUI.color instead of GUI.Box's
+    // backgroundColor tint (the default Unity skin's box texture doesn't
+    // tint reliably), and the streak/fever elements are bigger with a solid
+    // backing panel so they read clearly against the terrain.
+    public class HUD : MonoBehaviour
+    {
+        private struct Toast
+        {
+            public string Text;
+            public Color Color;
+            public float Duration;
+            public float TimeLeft;
+        }
+
+        private struct PositionedToast
+        {
+            public string Text;
+            public Color Color;
+            public Vector3 WorldPos;
+            public float Duration;
+            public float TimeLeft;
+        }
+
+        [SerializeField] private float toastDuration = 1.1f;
+        [SerializeField] private float feverToastDuration = 1.6f;
+        [SerializeField] private float pickupToastDuration = 0.8f;
+
+        private BirdController bird;
+        private ScoreManager score;
+        private SlideJudge slideJudge;
+        private FeverSystem fever;
+        private GameManager gameManager;
+        private Camera cam;
+        private CoinSpawner coinSpawner;
+        private CloudSpawner cloudSpawner;
+
+        private readonly List<Toast> toasts = new List<Toast>();
+        private readonly List<PositionedToast> pickupToasts = new List<PositionedToast>();
+        private Texture2D solidTex;
+
+        public void Bind(BirdController birdRef, ScoreManager scoreRef, SlideJudge slideJudgeRef, FeverSystem feverRef, GameManager gameManagerRef)
+        {
+            bird = birdRef;
+            score = scoreRef;
+            slideJudge = slideJudgeRef;
+            fever = feverRef;
+            gameManager = gameManagerRef;
+
+            slideJudge.OnGreatSlide += HandleGreatSlide;
+            slideJudge.OnStreakBroken += HandleStreakBroken;
+            fever.OnFeverStart += HandleFeverStart;
+        }
+
+        public void BindCollectibles(CoinSpawner coinSpawnerRef, CloudSpawner cloudSpawnerRef, Camera camera)
+        {
+            cam = camera;
+            coinSpawner = coinSpawnerRef;
+            cloudSpawner = cloudSpawnerRef;
+            coinSpawner.OnPickupPopup += HandlePickupPopup;
+            cloudSpawner.OnPickupPopup += HandlePickupPopup;
+        }
+
+        private void HandlePickupPopup(Vector3 worldPos, string text, Color color)
+        {
+            pickupToasts.Add(new PositionedToast { Text = text, Color = color, WorldPos = worldPos, Duration = pickupToastDuration, TimeLeft = pickupToastDuration });
+        }
+
+        private void OnDestroy()
+        {
+            if (slideJudge != null)
+            {
+                slideJudge.OnGreatSlide -= HandleGreatSlide;
+                slideJudge.OnStreakBroken -= HandleStreakBroken;
+            }
+            if (fever != null)
+            {
+                fever.OnFeverStart -= HandleFeverStart;
+            }
+            if (coinSpawner != null) coinSpawner.OnPickupPopup -= HandlePickupPopup;
+            if (cloudSpawner != null) cloudSpawner.OnPickupPopup -= HandlePickupPopup;
+        }
+
+        private void HandleGreatSlide(int streak, int gained)
+        {
+            string text = streak >= 3 ? $"GREAT SLIDE x{streak}! +{gained}" : $"SLIDE! +{gained}";
+            AddToast(text, new Color(1f, 0.6f, 0.2f), toastDuration);
+        }
+
+        private void HandleStreakBroken() => AddToast("STREAK RESET", new Color(0.85f, 0.35f, 0.35f), toastDuration);
+        private void HandleFeverStart() => AddToast($"FEVER TRIGGERED!  SCORE x{fever.Multiplier:0}", new Color(1f, 0.3f, 0.55f), feverToastDuration);
+
+        private void AddToast(string text, Color color, float duration)
+        {
+            toasts.Add(new Toast { Text = text, Color = color, Duration = duration, TimeLeft = duration });
+        }
+
+        private void Update()
+        {
+            for (int i = toasts.Count - 1; i >= 0; i--)
+            {
+                var t = toasts[i];
+                t.TimeLeft -= Time.deltaTime;
+                if (t.TimeLeft <= 0f) toasts.RemoveAt(i);
+                else toasts[i] = t;
+            }
+
+            for (int i = pickupToasts.Count - 1; i >= 0; i--)
+            {
+                var t = pickupToasts[i];
+                t.TimeLeft -= Time.deltaTime;
+                if (t.TimeLeft <= 0f) pickupToasts.RemoveAt(i);
+                else pickupToasts[i] = t;
+            }
+        }
+
+        private void OnGUI()
+        {
+            if (score == null) return;
+
+            var scoreStyle = new GUIStyle(GUI.skin.label) { fontSize = 34, fontStyle = FontStyle.Bold };
+            scoreStyle.normal.textColor = new Color(0.42f, 0.29f, 0.12f);
+            var midStyle = new GUIStyle(GUI.skin.label) { fontSize = 18 };
+            midStyle.normal.textColor = new Color(0.42f, 0.29f, 0.12f);
+
+            GUI.Label(new Rect(20, 14, 300, 44), score.Score.ToString("N0"), scoreStyle);
+            GUI.Label(new Rect(Screen.width - 220, 14, 200, 30), $"Island {gameManager.Island} · {gameManager.Multiplier}x", midStyle);
+
+            DrawStreakPanel();
+            if (fever.IsActive) DrawFeverBadge();
+            DrawToasts();
+            DrawPickupToasts();
+
+            var dbgStyle = new GUIStyle(GUI.skin.label) { fontSize = 14 };
+            dbgStyle.normal.textColor = new Color(1f, 1f, 1f, 0.75f);
+            string state = bird.OnGround ? "Grounded" : bird.Airborne ? "Airborne" : "Falling";
+            GUI.Label(new Rect(Screen.width - 220, Screen.height - 30, 220, 20), $"{state}  spd {bird.Speed:0}{(bird.IsDiving ? "  DIVE" : "")}", dbgStyle);
+        }
+
+        private void DrawStreakPanel()
+        {
+            const float panelW = 210f, panelH = 56f;
+            var panelRect = new Rect(16f, Screen.height - panelH - 14f, panelW, panelH);
+            DrawRect(panelRect, new Color(0f, 0f, 0f, 0.35f));
+
+            var labelStyle = new GUIStyle(GUI.skin.label) { fontSize = 18, fontStyle = FontStyle.Bold };
+            labelStyle.normal.textColor = Color.white;
+            GUI.Label(new Rect(panelRect.x + 10f, panelRect.y + 4f, panelW - 20f, 24f), $"STREAK {slideJudge.SlideStreak}/3", labelStyle);
+
+            for (int i = 0; i < 3; i++)
+            {
+                bool lit = slideJudge.SlideStreak > i || fever.IsActive;
+                var dotRect = new Rect(panelRect.x + 10f + i * 34f, panelRect.y + 28f, 26f, 26f);
+                DrawRect(dotRect, lit ? new Color(1f, 0.85f, 0.25f) : new Color(1f, 1f, 1f, 0.25f));
+            }
+        }
+
+        private void DrawFeverBadge()
+        {
+            var prevMatrix = GUI.matrix;
+
+            var rect = new Rect(Screen.width * 0.5f - 130f, 16f, 260f, 44f);
+            float pulse = 1f + Mathf.Sin(Time.time * 8f) * 0.06f;
+            GUIUtility.ScaleAroundPivot(new Vector2(pulse, pulse), new Vector2(rect.x + rect.width * 0.5f, rect.y + rect.height * 0.5f));
+
+            DrawRect(rect, new Color(1f, 0.25f, 0.5f));
+
+            var feverStyle = new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            feverStyle.normal.textColor = Color.white;
+            GUI.Label(rect, $"FEVER x{fever.Multiplier:0}  {fever.TimeRemaining:0.0}s", feverStyle);
+
+            GUI.matrix = prevMatrix;
+        }
+
+        private void DrawToasts()
+        {
+            var style = new GUIStyle(GUI.skin.label) { fontSize = 26, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            float y = Screen.height * 0.32f;
+            foreach (var t in toasts)
+            {
+                float alpha = Mathf.Clamp01(t.TimeLeft / (t.Duration * 0.4f));
+                float rise = (1f - t.TimeLeft / t.Duration) * 30f;
+                var c = t.Color;
+                c.a = alpha;
+                style.normal.textColor = c;
+                GUI.Label(new Rect(Screen.width * 0.5f - 260f, y - rise, 520f, 40f), t.Text, style);
+                y += 34f;
+            }
+        }
+
+        private void DrawPickupToasts()
+        {
+            if (cam == null) return;
+
+            var style = new GUIStyle(GUI.skin.label) { fontSize = 16, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            foreach (var t in pickupToasts)
+            {
+                Vector3 screenPos = cam.WorldToScreenPoint(t.WorldPos);
+                if (screenPos.z < 0f) continue; // behind camera, don't draw
+
+                float alpha = Mathf.Clamp01(t.TimeLeft / (t.Duration * 0.5f));
+                float rise = (1f - t.TimeLeft / t.Duration) * 24f;
+                var c = t.Color;
+                c.a = alpha;
+                style.normal.textColor = c;
+
+                float guiY = Screen.height - screenPos.y; // GUI space has y-down, screen space y-up
+                GUI.Label(new Rect(screenPos.x - 80f, guiY - rise - 20f, 160f, 26f), t.Text, style);
+            }
+        }
+
+        private void DrawRect(Rect rect, Color color)
+        {
+            if (solidTex == null)
+            {
+                solidTex = new Texture2D(1, 1);
+                solidTex.SetPixel(0, 0, Color.white);
+                solidTex.Apply();
+            }
+            var prevColor = GUI.color;
+            GUI.color = color;
+            GUI.DrawTexture(rect, solidTex);
+            GUI.color = prevColor;
+        }
+    }
+}
