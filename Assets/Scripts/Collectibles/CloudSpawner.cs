@@ -15,6 +15,9 @@ namespace FlyingChick
 
         public event Action<Vector3, string, Color> OnPickupPopup;
 
+        // Day Over stat.
+        public int TouchCount { get; private set; }
+
         private CloudField field;
         private BirdController bird;
         private Camera cam;
@@ -30,6 +33,26 @@ namespace FlyingChick
             burst = burstRef;
             var gm = GameManager.Instance;
             field = new CloudField(seed, gm.ViewHeight, gm.ScrollX);
+        }
+
+        private void Start()
+        {
+            GameManager.Instance.OnRunStart += HandleRunStart;
+        }
+
+        private void OnDestroy()
+        {
+            if (GameManager.Instance != null)
+                GameManager.Instance.OnRunStart -= HandleRunStart;
+        }
+
+        private void HandleRunStart()
+        {
+            var gm = GameManager.Instance;
+            field = new CloudField(UnityEngine.Random.Range(1, int.MaxValue), gm.ViewHeight, gm.ScrollX);
+            TouchCount = 0;
+            if (pool != null)
+                foreach (var t in pool) t.gameObject.SetActive(false);
         }
 
         private void Awake()
@@ -88,6 +111,7 @@ namespace FlyingChick
                 if (dx * dx + dy * dy >= r * r) continue;
 
                 field.MarkTouched(i);
+                TouchCount++;
                 float gain = baseCloudScore * (GameManager.Instance.Multiplier / 10f);
                 ScoreManager.Instance.AddScore(gain);
 

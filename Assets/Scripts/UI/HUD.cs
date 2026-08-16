@@ -40,6 +40,7 @@ namespace FlyingChick
         private SlideJudge slideJudge;
         private FeverSystem fever;
         private GameManager gameManager;
+        private DayCycle dayCycle;
         private Camera cam;
         private CoinSpawner coinSpawner;
         private CloudSpawner cloudSpawner;
@@ -47,6 +48,7 @@ namespace FlyingChick
         private readonly List<Toast> toasts = new List<Toast>();
         private readonly List<PositionedToast> pickupToasts = new List<PositionedToast>();
         private Texture2D solidTex;
+        private Texture2D sunTex;
 
         public void Bind(BirdController birdRef, ScoreManager scoreRef, SlideJudge slideJudgeRef, FeverSystem feverRef, GameManager gameManagerRef)
         {
@@ -59,6 +61,11 @@ namespace FlyingChick
             slideJudge.OnGreatSlide += HandleGreatSlide;
             slideJudge.OnStreakBroken += HandleStreakBroken;
             fever.OnFeverStart += HandleFeverStart;
+        }
+
+        public void BindDayCycle(DayCycle dayCycleRef)
+        {
+            dayCycle = dayCycleRef;
         }
 
         public void BindCollectibles(CoinSpawner coinSpawnerRef, CloudSpawner cloudSpawnerRef, Camera camera)
@@ -126,6 +133,7 @@ namespace FlyingChick
         private void OnGUI()
         {
             if (score == null) return;
+            if (gameManager.State != GameState.Playing) return;
 
             var scoreStyle = new GUIStyle(GUI.skin.label) { fontSize = 34, fontStyle = FontStyle.Bold };
             scoreStyle.normal.textColor = new Color(0.42f, 0.29f, 0.12f);
@@ -134,6 +142,7 @@ namespace FlyingChick
 
             GUI.Label(new Rect(20, 14, 300, 44), score.Score.ToString("N0"), scoreStyle);
             GUI.Label(new Rect(Screen.width - 220, 14, 200, 30), $"Island {gameManager.Island} · {gameManager.Multiplier}x", midStyle);
+            if (dayCycle != null) DrawDayClock();
 
             DrawStreakPanel();
             if (fever.IsActive) DrawFeverBadge();
@@ -145,6 +154,28 @@ namespace FlyingChick
             string state = bird.OnGround ? "Grounded" : bird.Airborne ? "Airborne" : "Falling";
             GUI.Label(new Rect(Screen.width - 220, Screen.height - 30, 220, 20), $"{state}  spd {bird.Speed:0}{(bird.IsDiving ? "  DIVE" : "")}", dbgStyle);
         }
+
+        private void DrawDayClock()
+        {
+            const float trackW = 100f, trackH = 10f;
+            var trackRect = new Rect(Screen.width - 120f, 48f, trackW, trackH);
+
+            // Dark, sky-independent track so it stays visible whether the
+            // background is the pale day sky or the dark night sky (the old
+            // pale-yellow fill on a pale-yellow sky was nearly invisible).
+            DrawRect(trackRect, new Color(0f, 0f, 0f, 0.45f));
+
+            float t = dayCycle.DayTime;
+            var fillRect = new Rect(trackRect.x, trackRect.y, trackW * t, trackH);
+            DrawRect(fillRect, Color.Lerp(new Color(1f, 0.6f, 0.15f), new Color(0.55f, 0.3f, 0.85f), t));
+
+            const float sunSize = 24f;
+            float sunX = trackRect.x + trackW * t - sunSize * 0.5f;
+            float sunY = trackRect.y + trackH * 0.5f - sunSize * 0.5f;
+            GUI.DrawTexture(new Rect(sunX, sunY, sunSize, sunSize), SunTexture);
+        }
+
+        private Texture2D SunTexture => sunTex != null ? sunTex : (sunTex = BuildSunTexture(32));
 
         private void DrawStreakPanel()
         {
@@ -215,6 +246,63 @@ namespace FlyingChick
 
                 float guiY = Screen.height - screenPos.y; // GUI space has y-down, screen space y-up
                 GUI.Label(new Rect(screenPos.x - 80f, guiY - rise - 20f, 160f, 26f), t.Text, style);
+            }
+        }
+
+        // Cute sun icon that rides the day-clock progress (round body, dotted
+        // rays, tiny face) -- procedural, same technique as BirdVisual's chick.
+        private Texture2D BuildSunTexture(int size)
+        {
+            var pixels = new Color[size * size];
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = Color.clear;
+
+            float cx = size * 0.5f, cy = size * 0.5f;
+            float bodyR = size * 0.30f;
+            var core = new Color(1f, 0.82f, 0.25f);
+            var rayColor = new Color(1f, 0.62f, 0.15f);
+            var faceColor = new Color(0.35f, 0.22f, 0.05f);
+
+            const int rayCount = 8;
+            for (int r = 0; r < rayCount; r++)
+            {
+                float angle = r * Mathf.PI * 2f / rayCount + Mathf.PI / 8f;
+                float dirX = Mathf.Cos(angle), dirY = Mathf.Sin(angle);
+                for (int k = 0; k < 3; k++)
+                {
+                    float dist = bodyR * 0.95f + k * size * 0.085f;
+                    float px = cx + dirX * dist;
+                    float py = cy + dirY * dist;
+                    float rr = size * (0.05f - k * 0.009f);
+                    FillDot(pixels, size, px, py, rr, rayColor);
+                }
+            }
+
+            FillDot(pixels, size, cx, cy, bodyR, core);
+            FillDot(pixels, size, cx - bodyR * 0.4f, cy - bodyR * 0.1f, size * 0.035f, faceColor);
+            FillDot(pixels, size, cx + bodyR * 0.4f, cy - bodyR * 0.1f, size * 0.035f, faceColor);
+            for (int i = -2; i <= 2; i++)
+            {
+                float sx = cx + i * size * 0.035f;
+                float sy = cy + bodyR * 0.25f + (2 - Mathf.Abs(i)) * size * 0.02f;
+                FillDot(pixels, size, sx, sy, size * 0.025f, faceColor);
+            }
+
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            tex.SetPixels(pixels);
+            tex.Apply();
+            return tex;
+        }
+
+        private static void FillDot(Color[] pixels, int size, float cx, float cy, float r, Color color)
+        {
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = x + 0.5f - cx, dy = y + 0.5f - cy;
+                    if (dx * dx + dy * dy <= r * r)
+                        pixels[y * size + x] = color;
+                }
             }
         }
 

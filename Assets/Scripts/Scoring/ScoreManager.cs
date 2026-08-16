@@ -29,13 +29,19 @@ namespace FlyingChick
         private void Start()
         {
             if (GameManager.Instance != null)
+            {
                 GameManager.Instance.OnIslandAdvanced += HandleIslandAdvanced;
+                GameManager.Instance.OnRunStart += HandleRunStart;
+            }
         }
 
         private void OnDestroy()
         {
             if (GameManager.Instance != null)
+            {
                 GameManager.Instance.OnIslandAdvanced -= HandleIslandAdvanced;
+                GameManager.Instance.OnRunStart -= HandleRunStart;
+            }
         }
 
         public void AddScore(float baseAmount)
@@ -48,6 +54,12 @@ namespace FlyingChick
         private void HandleIslandAdvanced(int island)
         {
             AddScore(50f * GameManager.Instance.Multiplier * 0.1f);
+        }
+
+        private void HandleRunStart()
+        {
+            Score = 0;
+            OnScoreChanged?.Invoke(Score);
         }
     }
 }

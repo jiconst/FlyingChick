@@ -9,9 +9,11 @@ namespace FlyingChick
     // against. Singleton per project convention (GameManager/ScoreManager/
     // SaveSystem only).
     //
-    // Island progression (M2): ported from the reference's inline
-    // islandDistance/ISLAND_LEN handling in update(). Day-cycle fields land
-    // in M4, not here.
+    // Also owns the Start/Playing/DayOver state machine (M4). BeginRun()
+    // resets scroll/island and generates a fresh terrain seed, then fires
+    // OnRunStart -- every other system (bird, score, streak, fever, coins,
+    // clouds) subscribes to that event to reset itself. GameManager doesn't
+    // know any of their details; it just broadcasts.
     public class GameManager : MonoBehaviour
     {
         public static GameManager Instance { get; private set; }
@@ -24,6 +26,7 @@ namespace FlyingChick
         public float ScrollX { get; private set; }
         public int Island { get; private set; } = 1;
         public int Multiplier => 10 + (Island - 1) * 2;
+        public GameState State { get; private set; } = GameState.Start;
 
         // Single shared terrain instance -- TerrainGenerator and BirdPhysics
         // both query this so the rendered hill and the physics ground line
@@ -32,6 +35,7 @@ namespace FlyingChick
         public GroundSampler Ground { get; private set; }
 
         public event Action<int> OnIslandAdvanced;
+        public event Action OnRunStart;
 
         private float islandDistance;
 
@@ -44,6 +48,29 @@ namespace FlyingChick
         {
             viewHeight = viewHeightValue;
             Ground = new GroundSampler(terrainSeed, viewHeight);
+        }
+
+        // Called by StartScreen (first press) and DayOverScreen ("다시하기").
+        public void BeginRun()
+        {
+            ScrollX = 0f;
+            Island = 1;
+            islandDistance = 0f;
+            Ground = new GroundSampler(UnityEngine.Random.Range(1, int.MaxValue), viewHeight);
+            State = GameState.Playing;
+            OnRunStart?.Invoke();
+        }
+
+        // Called by DayCycle when the day-length timer runs out.
+        public void EndRun()
+        {
+            State = GameState.DayOver;
+        }
+
+        // Called by DayOverScreen ("홈").
+        public void ReturnToStart()
+        {
+            State = GameState.Start;
         }
 
         public void AdvanceScroll(float delta)

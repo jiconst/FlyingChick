@@ -200,15 +200,38 @@ Transform에 적용). Rigidbody2D 사용 안 함, `BirdController.FixedUpdate`�
   먹은 화면 위치 근처에 `+3`/`SPEED!`/`CLOUD TOUCH! +N`이 잠깐 떴다 사라짐 (기존 스트릭/
   Fever용 중앙 고정 토스트와는 별도 리스트로 관리)
 
-## 4단계 — 낮/밤 사이클 — 🔲 M4
+## 4단계 — 낮/밤 사이클 — ✅ M4 구현 완료
 
-- `DAY_LENGTH = 90초`. dayTime 0→1 진행, HUD에 프로그레스 바
-- 하늘색이 밤으로 lerp, Day Over 화면(Score/Great Slides/Cloudtouches/Longest Fever/Island,
-  코인 카운트업, New Highscore, 홈/다시하기)
+- **`Core/GameState.cs`**: `Start`/`Playing`/`DayOver` 3상태 enum
+- **`Core/GameManager.cs`**: `State` 프로퍼티 + `BeginRun()`/`EndRun()`/`ReturnToStart()`.
+  `BeginRun()`이 ScrollX/Island 리셋 + **새 시드로 `Ground` 재생성**(리플레이마다 다른
+  지형) 후 `OnRunStart` 이벤트 발생 — 다른 모든 시스템(새 물리, 점수, 스트릭, Fever,
+  코인/구름 스포너)은 이 이벤트 하나만 구독해서 각자 스스로 리셋함. GameManager는 그
+  시스템들의 내부를 전혀 모름 (완전 이벤트 기반 디커플링)
+- **`Core/DayCycle.cs`**: `DAY_LENGTH=90초`, `State==Playing`일 때만 진행, dayTime 0→1,
+  1 도달 시 `GameManager.EndRun()` 호출
+- **`FX/SkyTint.cs`**: dayTime 기준 카메라 배경색을 낮→노을(0.55 지점)→밤으로 lerp.
+  **M4에서 안 한 것**: 태양/달 원판, 별, 실제 그라데이션 하늘(단색만) — M6/M7
+- **`Player/BirdController.cs`**: `State != Playing`이면 `FixedUpdate` 자체를 스킵 (물리/
+  스크롤 정지, Start/DayOver 화면에서 새가 가만히 앉아있음). `OnRunStart`에서 새
+  `GroundSampler`를 참조하는 새 `BirdPhysics`로 완전히 재구성
+- **`UI/StartScreen.cs`**: `State==Start`일 때만 표시, 아무 입력(터치/클릭/스페이스)이나
+  누르면 `GameManager.BeginRun()`
+- **`UI/DayOverScreen.cs`**: `State==DayOver`일 때 최종 통계(Score/Island/Great Slides/
+  Cloud Touches/Longest Fever) + Best 표시, "다시하기"(`BeginRun()`)/"홈"(`ReturnToStart()`)
+  버튼. Longest Fever는 `FeverSystem.LongestDuration`(신규), Cloud Touches는
+  `CloudSpawner.TouchCount`(신규)로 추적
+- **`Meta/SaveSystem.cs`**: 싱글톤(스펙상 GameManager/ScoreManager/SaveSystem만 허용),
+  **최고점수만** `PlayerPrefs` 저장 — 코인 지갑/새 컬렉션/미션 등 나머지 저장 데이터는
+  M5에서 `JsonUtility`+`persistentDataPath` 기반으로 확장
+- **`UI/HUD.cs`**: 우상단에 낮 진행바(day clock) 추가, `State==Playing`일 때만 표시되도록
+  게이팅(그 외 상태에서는 Start/DayOver 화면이 대신 그려짐)
+- **M4에서 안 한 것**: Day Over 화면의 코인 카운트업 애니메이션 (M6/M7 비주얼 폴리시)
 
 ## 5단계 — 메타 시스템 — 🔲 M5
 
-- 코인 지갑/저장 (`JsonUtility` + `Application.persistentDataPath`, 최고점수만 PlayerPrefs)
+- 코인 지갑/저장 (`JsonUtility` + `Application.persistentDataPath`, 최고점수는 이미 M4에서
+  `SaveSystem`으로 구현됨 — 여기선 그 위에 코인/새/미션 데이터 확장)
 - 데일리 미션 3개/일, 각 100코인, 날짜 변경 시 리셋
 - 새 컬렉션/가챠 (알 500코인, `BirdData` ScriptableObject, Perk 1개씩)
 - 로컬 리더보드 Top 10 + 누적 통계
@@ -226,9 +249,11 @@ Transform에 적용). Rigidbody2D 사용 안 함, `BirdController.FixedUpdate`�
    OnGUI 기반 점수 HUD. 플레이 확인 완료 (임계값/언덕폭 재튜닝 + micro-hop 버그 수정까지
    거쳐 확정).
 3. **M3 — 수집물**: ✅ 완료 (2026-08-17). 코인/스피드코인/구름 + 픽업 파티클(공유
-   ParticleSystem) + 월드 좌표 팝업 텍스트. **여기서 플레이 확인 후 M4 진행.**
-4. **M4 — 게임 루프**: 🔲 다음 작업. 낮/밤, 시작/Day Over 화면, 저장(최고점수)
-5. **M5 — 메타**: 🔲 코인 지갑, 데일리 미션, Nest Multiplier
+   ParticleSystem) + 월드 좌표 팝업 텍스트. 플레이 확인 완료 (스피드코인 배치 높이 재조정
+   포함).
+4. **M4 — 게임 루프**: ✅ 완료 (2026-08-17). Start/Playing/DayOver 상태 머신, 낮/밤 타이머 +
+   하늘색 lerp, 시작/Day Over 화면, 최고점수 저장. **여기서 플레이 확인 후 M5 진행.**
+5. **M5 — 메타**: 🔲 다음 작업. 코인 지갑, 데일리 미션, Nest Multiplier
 6. **M6 — 컬렉션**: 🔲 새 가챠/Perk, 홈 화면 새 선택, 로컬 리더보드
 7. **M7 — 폴리시**: 🔲 팔레트 전환 트윈, 사운드 훅, 성능 프로파일링
 
@@ -248,22 +273,33 @@ Transform에 적용). Rigidbody2D 사용 안 함, `BirdController.FixedUpdate`�
 ## 테스트 체크리스트
 
 - [x] 내리막 다이브 → 정점 발사 → 착지가 HTML 프로토타입과 유사한 손맛인지 (M1)
-- [ ] streak 3 → Fever 발동, 실패 착지 → 즉시 종료 확인 (M2, 플레이 확인 대기 중)
-- [ ] 섬 전환 시 배수/속도킥 동작, HUD의 Island/배수/점수/Fever뱃지/streak 점이 맞는지 (M2)
+- [x] streak 3 → Fever 발동, 실패 착지 → 즉시 종료 확인 (M2)
+- [x] 섬 전환 시 배수/속도킥 동작, HUD의 Island/배수/점수/Fever뱃지/streak 점이 맞는지 (M2)
+- [x] 코인/스피드코인/구름 픽업이 실제로 닿는 높이에 배치되는지 (M3)
+- [ ] 90초 후 Day Over, 재시작 시 상태 완전 초기화(점수/streak/Fever/코인·구름/지형까지
+      전부 새로 시작하는지) — M4, 플레이 확인 대기 중
+- [ ] Day Over에서 "홈" → 시작 화면 → 다시 시작이 정상 동작하는지 (M4)
+- [ ] 앱 재시작 후에도 Best 점수가 유지되는지 (M4 — Unity 에디터에서는 PlayerPrefs가
+      레지스트리/plist에 저장되므로, 에디터를 껐다 켜도 유지되면 정상)
 - [ ] 60fps 유지
-- [ ] 90초 후 Day Over, 재시작 시 상태 완전 초기화 (M4)
-- [ ] 앱 재시작 후 저장 데이터 유지 (M5)
+- [ ] 앱 재시작 후 코인 지갑/미션 등 저장 데이터 유지 (M5, 아직 해당 데이터 없음)
 
 ## 실행 방법
 
-빈 GameObject에 `GameBootstrapper` 컴포넌트만 붙이고 Play — 카메라/지형/새/점수 시스템/HUD가
-전부 런타임에 코드로 조립된다. 마우스 클릭/터치/스페이스바를 내리막에서 누르고 있으면 가속.
-좌상단 점수, 우상단 Island·배수, 좌하단 "STREAK n/3" 라벨 + 점 3개, 화면 중앙 상단(Fever
-중이면) 펄스하는 분홍 FEVER 뱃지, 화면 중앙에 SLIDE!/GREAT SLIDE/STREAK RESET/FEVER! 토스트
-텍스트가 잠깐 떴다 사라짐. 노란 코인/파란 스피드코인이 지형 위에 배치되고, 하늘엔 흰 뭉게구름
-(공중에서 닿으면 터치 인정)이 흘러감 — 먹을 때마다 그 위치에 파티클 버스트 + 작은 팝업
-텍스트(+3/SPEED!/CLOUD TOUCH!)가 뜸. 우하단 작은 회색 텍스트는 물리 디버그용(속도/상태/
-다이빙 여부).
+빈 GameObject에 `GameBootstrapper` 컴포넌트만 붙이고 Play — 카메라/지형/새/점수 시스템/HUD/
+낮밤 사이클/시작·종료 화면이 전부 런타임에 코드로 조립된다.
+
+1. **시작 화면**: 타이틀 + Best 점수(있으면). 아무데나 터치/클릭하거나 스페이스바 누르면 시작
+2. **플레이 중**: 마우스 클릭/터치/스페이스바를 내리막에서 누르고 있으면 가속. 좌상단 점수,
+   우상단 Island·배수 + 낮 진행바, 좌하단 "STREAK n/3" 라벨 + 점 3개, 화면 중앙 상단(Fever
+   중이면) 펄스하는 분홍 FEVER 뱃지, 중앙에 SLIDE!/GREAT SLIDE/STREAK RESET/FEVER! 토스트가
+   잠깐 떴다 사라짐. 노란 코인/파란 스피드코인이 지형 위에, 하늘엔 흰 뭉게구름(공중에서
+   닿으면 터치 인정)이 흘러감 — 먹을 때마다 파티클 버스트 + 작은 팝업 텍스트(+3/SPEED!/
+   CLOUD TOUCH!). 하늘색이 90초에 걸쳐 낮→노을→밤으로 서서히 변함. 우하단 작은 회색
+   텍스트는 물리 디버그용(속도/상태/다이빙 여부)
+3. **90초 경과(밤이 되면)**: Day Over 화면 — 최종 점수/Island/Great Slides/Cloud Touches/
+   Longest Fever + Best, New Highscore 표시(경신 시), "다시하기"(새 지형으로 바로 재시작)/
+   "홈"(시작 화면으로)
 
 ## 이전 세션 기록 (재발 방지용)
 

@@ -17,8 +17,25 @@ namespace FlyingChick
         public float TimeRemaining { get; private set; }
         public float Multiplier => IsActive ? multiplierWhenActive : 1f;
 
+        // Longest single fever activation this run, for the Day Over stats
+        // screen (reference: "LONGEST FEVER").
+        public float LongestDuration { get; private set; }
+        private float sessionElapsed;
+
         public event Action OnFeverStart;
         public event Action OnFeverEnd;
+
+        private void Start()
+        {
+            if (GameManager.Instance != null)
+                GameManager.Instance.OnRunStart += HandleRunStart;
+        }
+
+        private void OnDestroy()
+        {
+            if (GameManager.Instance != null)
+                GameManager.Instance.OnRunStart -= HandleRunStart;
+        }
 
         public void TriggerOrExtend()
         {
@@ -26,6 +43,7 @@ namespace FlyingChick
             {
                 IsActive = true;
                 TimeRemaining = baseDuration;
+                sessionElapsed = 0f;
                 OnFeverStart?.Invoke();
             }
             else
@@ -39,6 +57,7 @@ namespace FlyingChick
             if (!IsActive) return;
             IsActive = false;
             TimeRemaining = 0f;
+            LongestDuration = Mathf.Max(LongestDuration, sessionElapsed);
             OnFeverEnd?.Invoke();
         }
 
@@ -46,7 +65,16 @@ namespace FlyingChick
         {
             if (!IsActive) return;
             TimeRemaining -= Time.deltaTime;
+            sessionElapsed += Time.deltaTime;
             if (TimeRemaining <= 0f) EndImmediately();
+        }
+
+        private void HandleRunStart()
+        {
+            IsActive = false;
+            TimeRemaining = 0f;
+            LongestDuration = 0f;
+            sessionElapsed = 0f;
         }
     }
 }

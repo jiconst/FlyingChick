@@ -29,11 +29,27 @@ namespace FlyingChick
             bird.OnMissedLanding += HandleMiss;
         }
 
+        private void Start()
+        {
+            if (GameManager.Instance != null)
+                GameManager.Instance.OnRunStart += HandleRunStart;
+        }
+
         private void OnDestroy()
         {
-            if (bird == null) return;
-            bird.OnGreatSlideLanding -= HandleGreatSlide;
-            bird.OnMissedLanding -= HandleMiss;
+            if (bird != null)
+            {
+                bird.OnGreatSlideLanding -= HandleGreatSlide;
+                bird.OnMissedLanding -= HandleMiss;
+            }
+            if (GameManager.Instance != null)
+                GameManager.Instance.OnRunStart -= HandleRunStart;
+        }
+
+        private void HandleRunStart()
+        {
+            SlideStreak = 0;
+            TotalSlides = 0;
         }
 
         private void HandleGreatSlide()

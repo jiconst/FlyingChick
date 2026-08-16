@@ -8,6 +8,11 @@ namespace FlyingChick
     // to this Transform through ScreenSpace. The bird's screen X position is
     // fixed (reference: bird.startX = W*0.28) -- the WORLD scrolls, not the
     // bird, so the camera never has to move.
+    //
+    // Only simulates while GameManager.State == Playing (sits still on the
+    // Start/DayOver screens, matching the reference's idle render). Rebuilds
+    // BirdPhysics against a fresh GroundSampler on every OnRunStart, since
+    // GameManager generates a new terrain seed per run.
     public class BirdController : MonoBehaviour
     {
         [SerializeField] private float radius = 15f;
@@ -38,20 +43,27 @@ namespace FlyingChick
         private void Start()
         {
             var gm = GameManager.Instance;
+            gm.OnIslandAdvanced += HandleIslandAdvanced;
+            gm.OnRunStart += ResetForNewRun;
+            ResetForNewRun();
+        }
+
+        private void OnDestroy()
+        {
+            if (GameManager.Instance == null) return;
+            GameManager.Instance.OnIslandAdvanced -= HandleIslandAdvanced;
+            GameManager.Instance.OnRunStart -= ResetForNewRun;
+        }
+
+        private void ResetForNewRun()
+        {
+            var gm = GameManager.Instance;
             float width = ScreenSpace.ViewWidth(gm.ViewHeight, cam.aspect);
             float canvasStartX = width * startXFraction;
 
             physics = new BirdPhysics(canvasStartX, radius, gm.Ground);
             physics.Reset(gm.ScrollX);
             ApplyTransform();
-
-            gm.OnIslandAdvanced += HandleIslandAdvanced;
-        }
-
-        private void OnDestroy()
-        {
-            if (GameManager.Instance != null)
-                GameManager.Instance.OnIslandAdvanced -= HandleIslandAdvanced;
         }
 
         // Reference: speed += 120 on island jump.
@@ -63,6 +75,8 @@ namespace FlyingChick
         private void FixedUpdate()
         {
             var gm = GameManager.Instance;
+            if (gm.State != GameState.Playing) return;
+
             float dt = Time.fixedDeltaTime;
             bool holding = InputService.IsPointerHeld();
 

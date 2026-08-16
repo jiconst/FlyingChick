@@ -32,6 +32,24 @@ namespace FlyingChick
             field = new CoinField(seed, GameManager.Instance.ScrollX);
         }
 
+        private void Start()
+        {
+            GameManager.Instance.OnRunStart += HandleRunStart;
+        }
+
+        private void OnDestroy()
+        {
+            if (GameManager.Instance != null)
+                GameManager.Instance.OnRunStart -= HandleRunStart;
+        }
+
+        private void HandleRunStart()
+        {
+            field = new CoinField(UnityEngine.Random.Range(1, int.MaxValue), GameManager.Instance.ScrollX);
+            if (pool != null)
+                foreach (var sr in pool) sr.enabled = false;
+        }
+
         private void Awake()
         {
             coinSprite = ProceduralSprite.CreateCircle(20, new Color(1f, 0.82f, 0.25f));

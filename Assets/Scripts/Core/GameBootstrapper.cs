@@ -11,6 +11,8 @@ namespace FlyingChick
     // M2 (added): Great Slide streak judging, Fever, island progression
     // bonus/speed-kick (island logic itself lives in GameManager), score HUD.
     // M3 (added): coins, speed coins, clouds, pickup particle bursts + popups.
+    // M4 (added): Start/Playing/DayOver state machine, day-length timer +
+    // sky tint, Start/DayOver screens, best-score save.
     public class GameBootstrapper : MonoBehaviour
     {
         [SerializeField] private float viewHeight = 720f;
@@ -66,9 +68,24 @@ namespace FlyingChick
             var cloudSpawner = cloudGO.AddComponent<CloudSpawner>();
             cloudSpawner.Configure(bird, cam, burst, seed + 2);
 
+            var dayGO = new GameObject("DayCycle");
+            var dayCycle = dayGO.AddComponent<DayCycle>();
+
+            var skyGO = new GameObject("SkyTint");
+            var sky = skyGO.AddComponent<SkyTint>();
+            sky.Configure(cam, dayCycle);
+
+            var saveGO = new GameObject("SaveSystem");
+            saveGO.AddComponent<SaveSystem>();
+
             var hud = gameObject.AddComponent<HUD>();
             hud.Bind(bird, score, slideJudge, fever, gm);
             hud.BindCollectibles(coinSpawner, cloudSpawner, cam);
+            hud.BindDayCycle(dayCycle);
+
+            gameObject.AddComponent<StartScreen>();
+            var dayOverScreen = gameObject.AddComponent<DayOverScreen>();
+            dayOverScreen.Bind(score, slideJudge, cloudSpawner, fever, gm);
         }
     }
 }
