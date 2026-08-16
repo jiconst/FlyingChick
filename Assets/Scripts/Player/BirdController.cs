@@ -20,6 +20,7 @@ namespace FlyingChick
 
         public event Action OnGreatSlideLanding;
         public event Action OnMissedLanding;
+        public event Action OnLaunch; // grounded -> airborne this frame; drives the jump SFX
 
         public bool OnGround => physics.OnGround;
         public bool Airborne => physics.Airborne;
@@ -101,6 +102,7 @@ namespace FlyingChick
 
             if (physics.JustLandedGreatSlide) OnGreatSlideLanding?.Invoke();
             if (physics.JustLandedMiss) OnMissedLanding?.Invoke();
+            if (physics.JustLaunched) OnLaunch?.Invoke();
 
             // Use the SAME scrollX that physics.Step() just used -- physics.CanvasY
             // corresponds to that x, not to gm.ScrollX after AdvanceScroll shifted it.

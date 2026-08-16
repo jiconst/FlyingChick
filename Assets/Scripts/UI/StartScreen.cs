@@ -13,6 +13,7 @@ namespace FlyingChick
         private DailyMissions dailyMissions;
         private BirdCollection collection;
         private Leaderboard leaderboard;
+        private AudioManager audio;
 
         private bool showLeaderboard;
         private string hatchMessage;
@@ -23,12 +24,13 @@ namespace FlyingChick
         private Rect leaderboardToggleRect;
         private Rect leaderboardPanelRect;
 
-        public void Bind(CoinWallet walletRef, DailyMissions dailyMissionsRef, BirdCollection collectionRef, Leaderboard leaderboardRef)
+        public void Bind(CoinWallet walletRef, DailyMissions dailyMissionsRef, BirdCollection collectionRef, Leaderboard leaderboardRef, AudioManager audioRef)
         {
             wallet = walletRef;
             dailyMissions = dailyMissionsRef;
             collection = collectionRef;
             leaderboard = leaderboardRef;
+            audio = audioRef;
         }
 
         private void Update()
@@ -98,7 +100,10 @@ namespace FlyingChick
             }
 
             if (GUI.Button(leaderboardToggleRect, "기록 보기"))
+            {
                 showLeaderboard = true;
+                audio?.PlayClick();
+            }
 
             if (dailyMissions != null) DrawDailyMissions();
             if (collection != null) DrawBirdRow();
@@ -158,6 +163,7 @@ namespace FlyingChick
                 else if (clicked)
                 {
                     collection.Select(birds[i].Id);
+                    audio?.PlayClick();
                 }
             }
 
@@ -172,6 +178,7 @@ namespace FlyingChick
             GUI.enabled = !allOwned;
             if (GUI.Button(eggButtonRect, allOwned ? "새를 모두 모았어요" : $"알 구매 ({BirdPool.EggCostCoins} 코인)", eggStyle))
             {
+                audio?.PlayClick();
                 var hatched = collection.BuyEgg();
                 if (hatched.HasValue)
                 {
@@ -232,7 +239,10 @@ namespace FlyingChick
 
             var closeStyle = new GUIStyle(GUI.skin.button) { fontSize = 16 };
             if (GUI.Button(new Rect(leaderboardPanelRect.x + leaderboardPanelRect.width * 0.5f - 60f, leaderboardPanelRect.yMax - 50f, 120f, 36f), "닫기", closeStyle))
+            {
                 showLeaderboard = false;
+                audio?.PlayClick();
+            }
         }
 
         private void DrawSolidRect(Rect rect, Color color)

@@ -17,11 +17,12 @@ namespace FlyingChick
         private GameManager gameManager;
         private CoinWallet wallet;
         private NestMultiplier nest;
+        private AudioManager audio;
 
         private bool submittedThisRun;
         private bool isNewBest;
 
-        public void Bind(ScoreManager scoreRef, SlideJudge slideJudgeRef, CloudSpawner cloudSpawnerRef, FeverSystem feverRef, GameManager gameManagerRef, CoinWallet walletRef, NestMultiplier nestRef)
+        public void Bind(ScoreManager scoreRef, SlideJudge slideJudgeRef, CloudSpawner cloudSpawnerRef, FeverSystem feverRef, GameManager gameManagerRef, CoinWallet walletRef, NestMultiplier nestRef, AudioManager audioRef)
         {
             score = scoreRef;
             slideJudge = slideJudgeRef;
@@ -30,6 +31,7 @@ namespace FlyingChick
             gameManager = gameManagerRef;
             wallet = walletRef;
             nest = nestRef;
+            audio = audioRef;
 
             gameManager.OnRunStart += HandleRunStart;
         }
@@ -100,10 +102,12 @@ namespace FlyingChick
             float btnY = Mathf.Max(y + 16f, cy + 130f);
             if (GUI.Button(new Rect(cx - 170f, btnY, 150f, 46f), "다시하기", btnStyle))
             {
+                audio?.PlayClick();
                 gameManager.BeginRun();
             }
             if (GUI.Button(new Rect(cx + 20f, btnY, 150f, 46f), "홈", btnStyle))
             {
+                audio?.PlayClick();
                 gameManager.ReturnToStart();
             }
         }

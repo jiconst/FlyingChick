@@ -312,13 +312,69 @@ Transform에 적용). Rigidbody2D 사용 안 함, `BirdController.FixedUpdate`�
 ## 6단계 — 비주얼 & 폴리시 — 🚧 M7 진행 중
 
 이미 된 것: 획득 파티클 버스트(`FX/PickupBurst.cs`, M3), 팝업 텍스트(`UI/HUD.cs`의 토스트,
-M3), **카메라 줌**(`FX/CameraZoom.cs`, 아래 상세). 남은 것:
-- 다이브 먼지, Fever 별 트레일 파티클
-- 하늘 그라데이션/태양·달/별 (지금은 `FX/SkyTint.cs`의 단색 lerp만)
-- 섬별 10색 팔레트 전환 (지금은 언덕 3색 그라데이션 고정)
-- 사운드 훅 (점프/버튼 SFX, BGM, 점수 획득 효과음 — 아직 오디오 자체가 전혀 없음)
+M3), **카메라 줌**(`FX/CameraZoom.cs`), **다이브 먼지/Fever 별 트레일**
+(`FX/BirdTrailParticles.cs`), **하늘 그라데이션/태양·달/별/섬별 10색 팔레트**
+(`FX/SkyRenderer.cs`, `FX/SkyObjects.cs`, `Terrain/IslandPalette.cs`), **사운드**
+(`Audio/`, 아래 상세). 남은 것:
 - OnGUI를 실제 UI(Canvas/TMP 또는 UI Toolkit)로 교체
 - 성능 프로파일링
+- (스킵) 뒷배경 패럴랙스 언덕, 언덕 위 잔디 tuft — 우선순위 낮아서 생략, 필요하면 나중에
+
+### 사운드 (`Audio/ProceduralAudio.cs`, `Audio/AudioManager.cs`)
+- **실제 오디오 파일은 이 환경에서 만들거나 구할 방법이 없어서, 지금까지의 프로시저럴
+  비주얼(픽셀로 그린 병아리/해/구름 등)과 같은 접근으로 코드에서 사인파를 합성**해
+  `AudioClip.Create`로 만듦 (`ProceduralAudio.cs`: `Tone`/`Chime`/`Sweep`/`NoiseBurst`/`Pad`).
+  실제 작곡/사운드 디자인이 아니라 삐-소리 수준의 신호음이라는 점 감안할 것 — 나중에 진짜
+  오디오 에셋으로 교체하고 싶으면 `AudioManager.BuildClips()`에서 `AudioClip` 할당만
+  바꾸면 됨 (재생 로직은 그대로 재사용 가능)
+- **SFX 이벤트 연결**: `AudioManager`는 싱글톤이 아님(스펙상 GameManager/ScoreManager/
+  SaveSystem만 허용) — 다른 시스템들이 이미 노출하고 있는 이벤트(`BirdController.OnLaunch`
+  신규 추가, `SlideJudge.OnGreatSlide`, `FeverSystem.OnFeverStart`,
+  `CoinSpawner.OnCoinCollected`/`OnSpeedCoinCollected`, `CloudSpawner.OnCloudTouched`,
+  `GameManager.OnIslandAdvanced`, `DayCycle.OnDayOver`)를 구독하기만 함 — HUD/DailyMissions와
+  같은 패턴. 버튼 클릭음만 예외로, `StartScreen`/`DayOverScreen`이 `PlayClick()`을 직접 호출
+  (버튼 프레스는 이벤트가 없어서)
+- **`BirdController.OnLaunch`(신규)**: 착지 이벤트(`OnGreatSlideLanding`/`OnMissedLanding`)는
+  있었지만 "방금 떴다"는 이벤트가 없었음 — `BirdPhysics.JustLaunched`(지상→공중 전환된
+  바로 그 프레임, 명시적 발사든 자연스러운 크레스팅이든 둘 다 포함)를 추가해서 노출
+- **BGM은 자리만 채워둔 임시 앰비언트**(`ProceduralAudio.Pad`, 두 사인파 레이어를 6초
+  루프) — "잔잔한 배경음악"을 코드로 진짜 작곡하는 건 이 방식의 한계를 넘어서므로, 나중에
+  실제 작곡된 트랙으로 교체하는 걸 권장. 루프 시작/끝을 0으로 페이드시켜서 반복 재생 시
+  딸깍 소리는 안 남
+
+### 하늘/팔레트 (`Terrain/IslandPalette.cs`, `FX/SkyRenderer.cs`, `FX/SkyObjects.cs`)
+- `IslandPalette.cs`: HTML `PALETTES` 배열 10개를 색상 hex 그대로 포팅
+  (`ColorUtility.TryParseHtmlString` 기반 `Core/ColorUtil.cs`로 파싱). `ForIsland(island)`가
+  `(island-1) % 10`으로 순환
+- `TerrainGenerator`: 이제 언덕 색이 하드코딩 3색이 아니라 `IslandPalettes.ForIsland(gm.Island)`
+  기반 4단 그라데이션(HTML `drawHills()`의 CSS 그라데이션 stop 0/0.25/0.55/1과 동일 지점)이고,
+  `night = dayTime^1.4`만큼 어두운 색(`#1a1a3a` 등)으로 lerp됨 — 섬이 바뀌면 팔레트가,
+  시간이 지나면 어둡기가 자동으로 반영됨. 이걸 위해 `SetDayCycle(DayCycle)`을 새로 받음
+  (부트스트랩에서 DayCycle 생성 직후 배선)
+- `SkyRenderer.cs`: 기존 `SkyTint.cs`(카메라 배경색 단색 lerp)를 대체 — 화면을 항상 덮는
+  큰 정적 quad 메시 하나에 정점색 2개(위/아래)만 매 프레임 갱신하는 방식으로 실제
+  그라데이션 하늘을 그림. `dayTime > 0.55`부터는 노을(주황) 색이 아래쪽에 섞여 들어감
+  (HTML의 dusk band와 동일 공식). 카메라 `backgroundColor`는 이제 실질적으로 안 보임(항상
+  이 quad에 덮임) — 그냥 안전 폴백으로 남겨둠
+- `SkyObjects.cs`: 해/달 원판(하루 동안 위→아래로 하강, `dayTime>0.8`부터 달로 교체) +
+  반짝이는 별 40개(`night>0.2`부터 페이드인, 개별 트윈클). **HTML 원본처럼 스크롤과
+  무관하게 화면에 고정된 위치**에 그림 — 즉 이 좌표들은 `gm.ScrollX`를 더하지 않고
+  `ScreenSpace.ToWorldX/Y`에 바로 넣음 (다른 모든 오브젝트는 `gm.ScrollX + canvasX`를
+  쓰는 것과 대조적임, 헷갈리지 말 것)
+- **M7에서 안 한 것**: 뒷배경 패럴랙스 언덕 1겹, 언덕 위 잔디 tuft, 태양 주변 glow(HTML은
+  `ctx.shadowBlur`로 은은한 빛번짐을 넣지만 Unity SpriteRenderer로는 그대로 재현이 번거로워
+  생략 — 필요하면 Bloom 포스트프로세싱으로 나중에 처리하는 게 나음)
+
+### 다이브 먼지 / Fever 별 트레일 (`FX/BirdTrailParticles.cs`)
+- HTML의 `spawnDust()`(다이빙 중 프레임당 50% 확률)/`spawnStar()`(Fever 중 프레임당 60%
+  확률)를 그대로 포팅 — 원본이 60fps 가정 확률이라, `Time.deltaTime*60`으로 스케일해서
+  프레임레이트 달라도 기대 발생 빈도가 같도록 함
+- `FX/PickupBurst.cs`(한 번 터지고 끝나는 공유 파티클)와 달리, 이건 **새에 매달려 계속
+  스스로 판단해서 `Emit(1)`을 호출하는 전용 파티클 시스템 2개**(먼지/별). 새의 자식으로
+  붙여서 발사 위치는 새를 따라가지만, `simulationSpace = World`라서 이미 나온 입자는
+  새를 따라가지 않고 트레일처럼 뒤에 남음
+- 별 모양은 실제 별 폴리곤이 아니라 **작은 원(금색)으로 단순화** — 진짜 5각별 래스터라이즈는
+  지금 우선순위 대비 과함, 나중에 원한다면 `BirdVisual`의 픽셀 드로잉 방식으로 추가 가능
 
 ### 카메라 줌 (`FX/CameraZoom.cs`)
 - 원래 스펙(1단계에서 미룬 항목)은 "최대 뷰포트 15% 줌아웃"이었는데, **"병아리가 화면
@@ -374,9 +430,10 @@ M3), **카메라 줌**(`FX/CameraZoom.cs`, 아래 상세). 남은 것:
 6. **M6 — 컬렉션**: ✅ 구현 완료 (2026-08-17). 새 5종 + Perk(`BirdPool`/`BirdCollection`), 알
    가챠(500코인), 홈 화면 새 선택 줄, 로컬 Top 10 리더보드(`Leaderboard`). **여기서 M5+M6
    둘 다 플레이 확인 필요 — 확인 후 M7 진행.**
-7. **M7 — 폴리시**: 🚧 진행 중. 카메라 줌(높이 비례 줌아웃, `FX/CameraZoom.cs`) 완료 —
-   **플레이 확인 필요**. 남은 것: 파티클(다이브 먼지/Fever 별 트레일), 하늘/팔레트 비주얼,
-   사운드, OnGUI→실제 UI 교체, 성능 프로파일링
+7. **M7 — 폴리시**: 🚧 진행 중. 카메라 줌, 다이브 먼지/Fever 별 트레일, 하늘 그라데이션/
+   태양·달·별/섬별 10색 팔레트, **프로시저럴 합성 사운드**(`Audio/`, 신호음 수준 — 실제
+   오디오 에셋 아님) 완료 — **플레이 확인 필요**. 남은 것: OnGUI→실제 UI 교체, 성능
+   프로파일링
 
 ## 하지 말 것
 

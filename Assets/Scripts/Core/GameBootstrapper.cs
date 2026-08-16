@@ -18,7 +18,9 @@ namespace FlyingChick
     // permanent starting-multiplier bonus), daily missions.
     // M6 (added): bird collection/egg gacha with perks, home-screen bird
     // selection, local Top-10 leaderboard + lifetime stats.
-    // M7 (added so far): camera zoom-out while high above the ground.
+    // M7 (added so far): camera zoom-out while high above the ground; dive
+    // dust + Fever star trail particles; per-island palette sky gradient +
+    // sun/moon/stars; procedurally-synthesized SFX + ambient BGM.
     public class GameBootstrapper : MonoBehaviour
     {
         [SerializeField] private float viewHeight = 720f;
@@ -51,7 +53,7 @@ namespace FlyingChick
             gm.Configure(viewHeight, seed);
 
             var terrainGO = new GameObject("Terrain");
-            terrainGO.AddComponent<TerrainGenerator>();
+            var terrain = terrainGO.AddComponent<TerrainGenerator>();
 
             var birdGO = new GameObject("Bird");
             var bird = birdGO.AddComponent<BirdController>();
@@ -64,6 +66,9 @@ namespace FlyingChick
 
             var feverGO = new GameObject("FeverSystem");
             var fever = feverGO.AddComponent<FeverSystem>();
+
+            var trailParticles = birdGO.AddComponent<BirdTrailParticles>();
+            trailParticles.Configure(bird, fever);
 
             var scoreGO = new GameObject("ScoreManager");
             var score = scoreGO.AddComponent<ScoreManager>();
@@ -86,10 +91,15 @@ namespace FlyingChick
 
             var dayGO = new GameObject("DayCycle");
             var dayCycle = dayGO.AddComponent<DayCycle>();
+            terrain.SetDayCycle(dayCycle);
 
-            var skyGO = new GameObject("SkyTint");
-            var sky = skyGO.AddComponent<SkyTint>();
-            sky.Configure(cam, dayCycle);
+            var skyGO = new GameObject("SkyRenderer");
+            var sky = skyGO.AddComponent<SkyRenderer>();
+            sky.Configure(cam, dayCycle, gm);
+
+            var skyObjectsGO = new GameObject("SkyObjects");
+            var skyObjects = skyObjectsGO.AddComponent<SkyObjects>();
+            skyObjects.Configure(cam, dayCycle, viewHeight);
 
             var walletGO = new GameObject("CoinWallet");
             var wallet = walletGO.AddComponent<CoinWallet>();
@@ -117,6 +127,10 @@ namespace FlyingChick
             var leaderboard = leaderboardGO.AddComponent<Leaderboard>();
             leaderboard.Configure(gm, score, slideJudge);
 
+            var audioGO = new GameObject("AudioManager");
+            var audio = audioGO.AddComponent<AudioManager>();
+            audio.Configure(bird, slideJudge, fever, coinSpawner, cloudSpawner, gm, dayCycle);
+
             var hud = gameObject.AddComponent<HUD>();
             hud.Bind(bird, score, slideJudge, fever, gm);
             hud.BindCollectibles(coinSpawner, cloudSpawner, cam);
@@ -124,10 +138,10 @@ namespace FlyingChick
             hud.BindMeta(nest);
 
             var startScreen = gameObject.AddComponent<StartScreen>();
-            startScreen.Bind(wallet, dailyMissions, collection, leaderboard);
+            startScreen.Bind(wallet, dailyMissions, collection, leaderboard, audio);
 
             var dayOverScreen = gameObject.AddComponent<DayOverScreen>();
-            dayOverScreen.Bind(score, slideJudge, cloudSpawner, fever, gm, wallet, nest);
+            dayOverScreen.Bind(score, slideJudge, cloudSpawner, fever, gm, wallet, nest, audio);
         }
     }
 }

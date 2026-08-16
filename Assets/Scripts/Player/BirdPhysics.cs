@@ -53,6 +53,10 @@ namespace FlyingChick
         // holdWasDownhill). False-landing (JustLandedMiss) breaks the streak.
         public bool JustLandedGreatSlide { get; private set; }
         public bool JustLandedMiss { get; private set; }
+        // True for exactly one Step() call: grounded -> airborne this frame
+        // (either an explicit launch off an uphill crest, or the implicit
+        // "terrain curved away faster than gravity" case). Drives the jump SFX.
+        public bool JustLaunched { get; private set; }
 
         private readonly float radius;
         private readonly GroundSampler ground;
@@ -89,6 +93,8 @@ namespace FlyingChick
         {
             JustLandedGreatSlide = false;
             JustLandedMiss = false;
+            JustLaunched = false;
+            bool wasOnGround = OnGround;
 
             float worldBirdX = scrollX + CanvasX;
             float slope = ground.GroundSlope(worldBirdX);
@@ -143,6 +149,7 @@ namespace FlyingChick
             }
 
             if (Airborne) airborneTime += dt;
+            if (wasOnGround && Airborne) JustLaunched = true;
 
             float targetAngle = Mathf.Atan2(VerticalVelocity, Speed);
             Angle += (targetAngle - Angle) * Mathf.Min(1f, dt * 10f);
