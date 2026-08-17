@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FlyingChick
@@ -10,6 +11,12 @@ namespace FlyingChick
     // (10-palette swap, reference PALETTES) darkened toward night using the
     // same 4-stop gradient and lerp targets as the reference's drawHills().
     // Parallax background hill and grass tufts are still skipped.
+    //
+    // M7 perf pass: vertex/color/triangle buffers used to be `new`-allocated
+    // every single LateUpdate (this rebuilds every frame). They're now
+    // reusable Lists cleared and refilled in place -- List.Clear() keeps the
+    // backing array, so once the lists reach their steady-state capacity
+    // (mesh width barely changes frame to frame) this generates no more GC.
     public class TerrainGenerator : MonoBehaviour
     {
         [SerializeField] private float sampleStep = 6f;
@@ -18,6 +25,10 @@ namespace FlyingChick
         private Mesh mesh;
         private Camera cam;
         private DayCycle dayCycle;
+
+        private readonly List<Vector3> vertexBuffer = new List<Vector3>(256);
+        private readonly List<Color> colorBuffer = new List<Color>(256);
+        private readonly List<int> triangleBuffer = new List<int>(768);
 
         // Reference: night-darkening targets in drawHills()'s gradient.
         private static readonly Color NightTop = ColorUtil.Hex("#1a1a3a");
@@ -67,8 +78,9 @@ namespace FlyingChick
             float rightEdge = ScreenSpace.RightEdgeCanvasX(viewHeight, cam.aspect, cam.orthographicSize);
             int steps = Mathf.Max(2, Mathf.CeilToInt((rightEdge - leftEdge) / sampleStep) + 1);
 
-            var vertices = new Vector3[steps * 2];
-            var colors = new Color[steps * 2];
+            vertexBuffer.Clear();
+            colorBuffer.Clear();
+            triangleBuffer.Clear();
 
             float bandTop = ground.BaseY - ground.MaxAmplitude;
             float bandRange = ground.MaxAmplitude * 2f;
@@ -82,27 +94,25 @@ namespace FlyingChick
                 float localX = ScreenSpace.ToWorldX(canvasX, viewHeight, cam.aspect);
                 float localY = ScreenSpace.ToWorldY(canvasY, viewHeight);
 
-                vertices[i * 2] = new Vector3(localX, localY, 0f);
-                vertices[i * 2 + 1] = new Vector3(localX, -viewHeight * 0.5f - fillDepth, 0f);
+                vertexBuffer.Add(new Vector3(localX, localY, 0f));
+                vertexBuffer.Add(new Vector3(localX, -viewHeight * 0.5f - fillDepth, 0f));
 
                 float t = Mathf.Clamp01((canvasY - bandTop) / bandRange);
-                colors[i * 2] = SampleBand(t, top, band0, band1, band2);
-                colors[i * 2 + 1] = band2;
+                colorBuffer.Add(SampleBand(t, top, band0, band1, band2));
+                colorBuffer.Add(band2);
             }
 
-            var triangles = new int[(steps - 1) * 6];
-            int t2 = 0;
             for (int i = 0; i < steps - 1; i++)
             {
                 int topLeft = i * 2, bottomLeft = i * 2 + 1, topRight = (i + 1) * 2, bottomRight = (i + 1) * 2 + 1;
-                triangles[t2++] = topLeft; triangles[t2++] = topRight; triangles[t2++] = bottomLeft;
-                triangles[t2++] = bottomLeft; triangles[t2++] = topRight; triangles[t2++] = bottomRight;
+                triangleBuffer.Add(topLeft); triangleBuffer.Add(topRight); triangleBuffer.Add(bottomLeft);
+                triangleBuffer.Add(bottomLeft); triangleBuffer.Add(topRight); triangleBuffer.Add(bottomRight);
             }
 
             mesh.Clear();
-            mesh.vertices = vertices;
-            mesh.colors = colors;
-            mesh.triangles = triangles;
+            mesh.SetVertices(vertexBuffer);
+            mesh.SetColors(colorBuffer);
+            mesh.SetTriangles(triangleBuffer, 0);
             mesh.RecalculateBounds();
         }
 

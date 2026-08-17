@@ -1,17 +1,24 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace FlyingChick
 {
-    // M2 scope: functional score/island/fever/streak readout via OnGUI --
-    // no Canvas/TMP yet, that's a later visual pass (M6/M7). Also carries a
-    // small physics debug line (was Debug/SimpleHud, now retired).
+    // M2 scope was a functional score/island/fever/streak readout via
+    // OnGUI. M7: converted to a runtime-built UGUI/TextMeshPro hierarchy
+    // (Canvas + TMP_Text + Image), per explicit choice among OnGUI
+    // replacement options (see CLAUDE.md). Still fully code-driven -- built
+    // once in Bind(), never touched in the Editor. Toasts and pickup toasts
+    // use small fixed-size pools of pre-built UI elements (enabled/disabled
+    // + text/color/position updated per frame) instead of
+    // Instantiate/Destroy, matching this project's existing pooling
+    // convention (see Collectibles/CoinSpawner etc).
     //
-    // Streak/fever feedback was reported hard to notice twice now. Boxes are
-    // drawn with a solid 1x1 texture + GUI.color instead of GUI.Box's
-    // backgroundColor tint (the default Unity skin's box texture doesn't
-    // tint reliably), and the streak/fever elements are bigger with a solid
-    // backing panel so they read clearly against the terrain.
+    // Korean text ("STREAK"/미션 설명 등) needs a font asset with Hangul
+    // coverage -- see UIFontProvider for how that's built at runtime
+    // without a manual Editor import step. If Korean glyphs show as tofu
+    // boxes on first playtest, that file is the place to look.
     public class HUD : MonoBehaviour
     {
         private struct Toast
@@ -31,6 +38,11 @@ namespace FlyingChick
             public float TimeLeft;
         }
 
+        private const int ToastPoolSize = 6;
+        private const int PickupToastPoolSize = 10;
+        private const int NestLinePoolSize = 5;
+        private const int StreakDotCount = 3;
+
         [SerializeField] private float toastDuration = 1.1f;
         [SerializeField] private float feverToastDuration = 1.6f;
         [SerializeField] private float pickupToastDuration = 0.8f;
@@ -48,8 +60,34 @@ namespace FlyingChick
 
         private readonly List<Toast> toasts = new List<Toast>();
         private readonly List<PositionedToast> pickupToasts = new List<PositionedToast>();
-        private Texture2D solidTex;
-        private Texture2D sunTex;
+
+        private GameObject root;
+
+        private TextMeshProUGUI scoreText;
+        private TextMeshProUGUI midText;
+        private RectTransform midRect;
+
+        private RectTransform dayTrackRect;
+        private Image dayTrackFill;
+        private RectTransform sunIconRect;
+
+        private RectTransform streakPanelRect;
+        private TextMeshProUGUI streakLabel;
+        private readonly Image[] streakDots = new Image[StreakDotCount];
+
+        private RectTransform nestPanelRect;
+        private Image nestPanelBg;
+        private TextMeshProUGUI nestHeaderText;
+        private readonly TextMeshProUGUI[] nestLines = new TextMeshProUGUI[NestLinePoolSize];
+
+        private RectTransform feverRect;
+        private TextMeshProUGUI feverText;
+
+        private readonly TextMeshProUGUI[] toastPool = new TextMeshProUGUI[ToastPoolSize];
+        private readonly TextMeshProUGUI[] pickupToastPool = new TextMeshProUGUI[PickupToastPoolSize];
+
+        private TextMeshProUGUI dbgStateText;
+        private TextMeshProUGUI dbgHeightText;
 
         public void Bind(BirdController birdRef, ScoreManager scoreRef, SlideJudge slideJudgeRef, FeverSystem feverRef, GameManager gameManagerRef)
         {
@@ -62,17 +100,12 @@ namespace FlyingChick
             slideJudge.OnGreatSlide += HandleGreatSlide;
             slideJudge.OnStreakBroken += HandleStreakBroken;
             fever.OnFeverStart += HandleFeverStart;
+
+            BuildUI();
         }
 
-        public void BindDayCycle(DayCycle dayCycleRef)
-        {
-            dayCycle = dayCycleRef;
-        }
-
-        public void BindMeta(NestMultiplier nestRef)
-        {
-            nest = nestRef;
-        }
+        public void BindDayCycle(DayCycle dayCycleRef) => dayCycle = dayCycleRef;
+        public void BindMeta(NestMultiplier nestRef) => nest = nestRef;
 
         public void BindCollectibles(CoinSpawner coinSpawnerRef, CloudSpawner cloudSpawnerRef, Camera camera)
         {
@@ -95,10 +128,7 @@ namespace FlyingChick
                 slideJudge.OnGreatSlide -= HandleGreatSlide;
                 slideJudge.OnStreakBroken -= HandleStreakBroken;
             }
-            if (fever != null)
-            {
-                fever.OnFeverStart -= HandleFeverStart;
-            }
+            if (fever != null) fever.OnFeverStart -= HandleFeverStart;
             if (coinSpawner != null) coinSpawner.OnPickupPopup -= HandlePickupPopup;
             if (cloudSpawner != null) cloudSpawner.OnPickupPopup -= HandlePickupPopup;
         }
@@ -117,177 +147,296 @@ namespace FlyingChick
             toasts.Add(new Toast { Text = text, Color = color, Duration = duration, TimeLeft = duration });
         }
 
+        private void BuildUI()
+        {
+            var canvas = UIFactory.CreateCanvas("HUD Canvas", 0);
+            root = canvas.gameObject;
+            var t = canvas.transform;
+
+            var brown = new Color(0.42f, 0.29f, 0.12f);
+
+            scoreText = UIFactory.CreateText(t, "Score", 34, brown, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            UIFactory.SetTopLeft((RectTransform)scoreText.transform, 20, 14, 300, 44);
+
+            midText = UIFactory.CreateText(t, "IslandMult", 18, brown);
+            midRect = (RectTransform)midText.transform;
+
+            BuildDayClock(t);
+            BuildStreakPanel(t);
+            BuildNestPanel(t);
+            BuildFeverBadge(t);
+            BuildToastPool(t);
+            BuildPickupToastPool(t);
+            BuildDebugText(t);
+        }
+
+        private void BuildDayClock(Transform parent)
+        {
+            var track = UIFactory.CreatePanel(parent, "DayTrack", new Color(0f, 0f, 0f, 0.45f));
+            dayTrackRect = (RectTransform)track.transform;
+
+            dayTrackFill = UIFactory.CreatePanel(track.transform, "DayFill", new Color(1f, 0.6f, 0.15f));
+            var fillRect = (RectTransform)dayTrackFill.transform;
+            fillRect.anchorMin = new Vector2(0f, 0f);
+            fillRect.anchorMax = new Vector2(0f, 1f);
+            fillRect.pivot = new Vector2(0f, 0.5f);
+            fillRect.anchoredPosition = Vector2.zero;
+            fillRect.sizeDelta = Vector2.zero;
+
+            var sunSprite = BuildSunSprite(32);
+            var sun = UIFactory.CreateImage(parent, "SunIcon", sunSprite);
+            sunIconRect = (RectTransform)sun.transform;
+        }
+
+        private void BuildStreakPanel(Transform parent)
+        {
+            var panel = UIFactory.CreatePanel(parent, "StreakPanel", new Color(0f, 0f, 0f, 0.35f));
+            streakPanelRect = (RectTransform)panel.transform;
+
+            streakLabel = UIFactory.CreateText(panel.transform, "StreakLabel", 18, Color.white, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            UIFactory.SetTopLeft((RectTransform)streakLabel.transform, 10f, 4f, 190f, 24f);
+
+            for (int i = 0; i < StreakDotCount; i++)
+            {
+                var dot = UIFactory.CreatePanel(panel.transform, $"Dot{i}", Color.white);
+                streakDots[i] = dot;
+                UIFactory.SetTopLeft((RectTransform)dot.transform, 10f + i * 34f, 28f, 26f, 26f);
+            }
+        }
+
+        private void BuildNestPanel(Transform parent)
+        {
+            var panel = UIFactory.CreatePanel(parent, "NestPanel", new Color(0f, 0f, 0f, 0.3f));
+            nestPanelRect = (RectTransform)panel.transform;
+            nestPanelBg = panel;
+
+            nestHeaderText = UIFactory.CreateText(panel.transform, "NestHeader", 13, new Color(1f, 0.85f, 0.4f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            UIFactory.SetTopLeft((RectTransform)nestHeaderText.transform, 8f, 2f, 214f, 18f);
+
+            for (int i = 0; i < NestLinePoolSize; i++)
+            {
+                var line = UIFactory.CreateText(panel.transform, $"NestLine{i}", 12, Color.white);
+                nestLines[i] = line;
+                UIFactory.SetTopLeft((RectTransform)line.transform, 8f, 20f + i * 20f, 214f, 18f);
+            }
+        }
+
+        private void BuildFeverBadge(Transform parent)
+        {
+            var panel = UIFactory.CreatePanel(parent, "FeverBadge", new Color(1f, 0.25f, 0.5f));
+            feverRect = (RectTransform)panel.transform;
+
+            feverText = UIFactory.CreateText(panel.transform, "FeverText", 22, Color.white, TextAlignmentOptions.Center, FontStyles.Bold);
+            UIFactory.StretchFull((RectTransform)feverText.transform);
+
+            panel.gameObject.SetActive(false);
+        }
+
+        private void BuildToastPool(Transform parent)
+        {
+            for (int i = 0; i < ToastPoolSize; i++)
+            {
+                var text = UIFactory.CreateText(parent, $"Toast{i}", 26, Color.white, TextAlignmentOptions.Center, FontStyles.Bold);
+                toastPool[i] = text;
+                text.gameObject.SetActive(false);
+            }
+        }
+
+        private void BuildPickupToastPool(Transform parent)
+        {
+            for (int i = 0; i < PickupToastPoolSize; i++)
+            {
+                var text = UIFactory.CreateText(parent, $"PickupToast{i}", 16, Color.white, TextAlignmentOptions.Center, FontStyles.Bold);
+                pickupToastPool[i] = text;
+                text.gameObject.SetActive(false);
+            }
+        }
+
+        private void BuildDebugText(Transform parent)
+        {
+            dbgStateText = UIFactory.CreateText(parent, "DbgState", 14, new Color(1f, 1f, 1f, 0.75f));
+            dbgHeightText = UIFactory.CreateText(parent, "DbgHeight", 14, new Color(1f, 1f, 1f, 0.75f));
+        }
+
         private void Update()
         {
             for (int i = toasts.Count - 1; i >= 0; i--)
             {
-                var t = toasts[i];
-                t.TimeLeft -= Time.deltaTime;
-                if (t.TimeLeft <= 0f) toasts.RemoveAt(i);
-                else toasts[i] = t;
+                var tst = toasts[i];
+                tst.TimeLeft -= Time.deltaTime;
+                if (tst.TimeLeft <= 0f) toasts.RemoveAt(i);
+                else toasts[i] = tst;
             }
 
             for (int i = pickupToasts.Count - 1; i >= 0; i--)
             {
-                var t = pickupToasts[i];
-                t.TimeLeft -= Time.deltaTime;
-                if (t.TimeLeft <= 0f) pickupToasts.RemoveAt(i);
-                else pickupToasts[i] = t;
+                var tst = pickupToasts[i];
+                tst.TimeLeft -= Time.deltaTime;
+                if (tst.TimeLeft <= 0f) pickupToasts.RemoveAt(i);
+                else pickupToasts[i] = tst;
+            }
+
+            if (score == null) return;
+
+            bool playing = gameManager.State == GameState.Playing;
+            if (root.activeSelf != playing) root.SetActive(playing);
+            if (!playing) return;
+
+            scoreText.text = score.Score.ToString("N0");
+
+            midText.text = $"Island {gameManager.Island} · {gameManager.Multiplier}x";
+            UIFactory.SetTopLeft(midRect, Screen.width - 220, 14, 200, 30);
+
+            if (dayCycle != null) UpdateDayClock();
+            UpdateStreakPanel();
+
+            bool feverActive = fever.IsActive;
+            if (feverRect.gameObject.activeSelf != feverActive) feverRect.gameObject.SetActive(feverActive);
+            if (feverActive) UpdateFeverBadge();
+
+            if (nest != null) UpdateNestPanel();
+            else nestPanelBg.gameObject.SetActive(false);
+
+            UpdateToasts();
+            UpdatePickupToasts();
+
+            string state = bird.OnGround ? "Grounded" : bird.Airborne ? "Airborne" : "Falling";
+            dbgStateText.text = $"{state}  spd {bird.Speed:0}{(bird.IsDiving ? "  DIVE" : "")}";
+            UIFactory.SetTopLeft((RectTransform)dbgStateText.transform, Screen.width - 220, Screen.height - 50, 220, 20);
+
+            if (cam != null)
+            {
+                dbgHeightText.gameObject.SetActive(true);
+                dbgHeightText.text = $"height {bird.HeightAboveGround:0}  zoom {cam.orthographicSize:0}";
+                UIFactory.SetTopLeft((RectTransform)dbgHeightText.transform, Screen.width - 220, Screen.height - 30, 220, 20);
+            }
+            else
+            {
+                dbgHeightText.gameObject.SetActive(false);
             }
         }
 
-        private void OnGUI()
-        {
-            if (score == null) return;
-            if (gameManager.State != GameState.Playing) return;
-
-            var scoreStyle = new GUIStyle(GUI.skin.label) { fontSize = 34, fontStyle = FontStyle.Bold };
-            scoreStyle.normal.textColor = new Color(0.42f, 0.29f, 0.12f);
-            var midStyle = new GUIStyle(GUI.skin.label) { fontSize = 18 };
-            midStyle.normal.textColor = new Color(0.42f, 0.29f, 0.12f);
-
-            GUI.Label(new Rect(20, 14, 300, 44), score.Score.ToString("N0"), scoreStyle);
-            GUI.Label(new Rect(Screen.width - 220, 14, 200, 30), $"Island {gameManager.Island} · {gameManager.Multiplier}x", midStyle);
-            if (dayCycle != null) DrawDayClock();
-
-            DrawStreakPanel();
-            if (fever.IsActive) DrawFeverBadge();
-            if (nest != null) DrawNestPanel();
-            DrawToasts();
-            DrawPickupToasts();
-
-            var dbgStyle = new GUIStyle(GUI.skin.label) { fontSize = 14 };
-            dbgStyle.normal.textColor = new Color(1f, 1f, 1f, 0.75f);
-            string state = bird.OnGround ? "Grounded" : bird.Airborne ? "Airborne" : "Falling";
-            GUI.Label(new Rect(Screen.width - 220, Screen.height - 50, 220, 20), $"{state}  spd {bird.Speed:0}{(bird.IsDiving ? "  DIVE" : "")}", dbgStyle);
-            if (cam != null)
-                GUI.Label(new Rect(Screen.width - 220, Screen.height - 30, 220, 20), $"height {bird.HeightAboveGround:0}  zoom {cam.orthographicSize:0}", dbgStyle);
-        }
-
-        private void DrawDayClock()
+        private void UpdateDayClock()
         {
             const float trackW = 100f, trackH = 10f;
-            var trackRect = new Rect(Screen.width - 120f, 48f, trackW, trackH);
-
-            // Dark, sky-independent track so it stays visible whether the
-            // background is the pale day sky or the dark night sky (the old
-            // pale-yellow fill on a pale-yellow sky was nearly invisible).
-            DrawRect(trackRect, new Color(0f, 0f, 0f, 0.45f));
+            UIFactory.SetTopLeft(dayTrackRect, Screen.width - 120f, 48f, trackW, trackH);
 
             float t = dayCycle.DayTime;
-            var fillRect = new Rect(trackRect.x, trackRect.y, trackW * t, trackH);
-            DrawRect(fillRect, Color.Lerp(new Color(1f, 0.6f, 0.15f), new Color(0.55f, 0.3f, 0.85f), t));
+            ((RectTransform)dayTrackFill.transform).sizeDelta = new Vector2(trackW * t, 0f);
+            dayTrackFill.color = Color.Lerp(new Color(1f, 0.6f, 0.15f), new Color(0.55f, 0.3f, 0.85f), t);
 
             const float sunSize = 24f;
-            float sunX = trackRect.x + trackW * t - sunSize * 0.5f;
-            float sunY = trackRect.y + trackH * 0.5f - sunSize * 0.5f;
-            GUI.DrawTexture(new Rect(sunX, sunY, sunSize, sunSize), SunTexture);
+            float sunX = Screen.width - 120f + trackW * t - sunSize * 0.5f;
+            float sunY = 48f + trackH * 0.5f - sunSize * 0.5f;
+            UIFactory.SetTopLeft(sunIconRect, sunX, sunY, sunSize, sunSize);
         }
 
-        private Texture2D SunTexture => sunTex != null ? sunTex : (sunTex = BuildSunTexture(32));
-
-        private void DrawStreakPanel()
+        private void UpdateStreakPanel()
         {
             const float panelW = 210f, panelH = 56f;
-            var panelRect = new Rect(16f, Screen.height - panelH - 14f, panelW, panelH);
-            DrawRect(panelRect, new Color(0f, 0f, 0f, 0.35f));
+            UIFactory.SetTopLeft(streakPanelRect, 16f, Screen.height - panelH - 14f, panelW, panelH);
 
-            var labelStyle = new GUIStyle(GUI.skin.label) { fontSize = 18, fontStyle = FontStyle.Bold };
-            labelStyle.normal.textColor = Color.white;
-            GUI.Label(new Rect(panelRect.x + 10f, panelRect.y + 4f, panelW - 20f, 24f), $"STREAK {slideJudge.SlideStreak}/3", labelStyle);
+            streakLabel.text = $"STREAK {slideJudge.SlideStreak}/3";
 
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < StreakDotCount; i++)
             {
                 bool lit = slideJudge.SlideStreak > i || fever.IsActive;
-                var dotRect = new Rect(panelRect.x + 10f + i * 34f, panelRect.y + 28f, 26f, 26f);
-                DrawRect(dotRect, lit ? new Color(1f, 0.85f, 0.25f) : new Color(1f, 1f, 1f, 0.25f));
+                streakDots[i].color = lit ? new Color(1f, 0.85f, 0.25f) : new Color(1f, 1f, 1f, 0.25f);
             }
         }
 
-        private void DrawNestPanel()
+        private void UpdateNestPanel()
         {
             var missions = nest.ActiveMissions;
-            if (missions.Length == 0) return;
+            if (missions.Length == 0)
+            {
+                nestPanelBg.gameObject.SetActive(false);
+                return;
+            }
 
+            nestPanelBg.gameObject.SetActive(true);
             const float panelW = 230f;
             float panelH = 22f + missions.Length * 20f;
-            var panelRect = new Rect(20f, 66f, panelW, panelH);
-            DrawRect(panelRect, new Color(0f, 0f, 0f, 0.3f));
+            UIFactory.SetTopLeft(nestPanelRect, 20f, 66f, panelW, panelH);
 
-            var headerStyle = new GUIStyle(GUI.skin.label) { fontSize = 13, fontStyle = FontStyle.Bold };
-            headerStyle.normal.textColor = new Color(1f, 0.85f, 0.4f);
-            GUI.Label(new Rect(panelRect.x + 8f, panelRect.y + 2f, panelW - 16f, 18f), $"Nest 목표 (+{nest.Bonus} 배수)", headerStyle);
+            nestHeaderText.text = $"Nest 목표 (+{nest.Bonus} 배수)";
 
-            var lineStyle = new GUIStyle(GUI.skin.label) { fontSize = 12 };
-            float y = panelRect.y + 20f;
-            foreach (var mission in missions)
+            for (int i = 0; i < NestLinePoolSize; i++)
             {
+                if (i >= missions.Length) { nestLines[i].gameObject.SetActive(false); continue; }
+
+                nestLines[i].gameObject.SetActive(true);
+                var mission = missions[i];
                 float progress = nest.GetProgress(mission);
                 bool done = progress >= mission.Target;
-                lineStyle.normal.textColor = done ? new Color(0.6f, 1f, 0.6f) : new Color(1f, 1f, 1f, 0.85f);
+                nestLines[i].color = done ? new Color(0.6f, 1f, 0.6f) : new Color(1f, 1f, 1f, 0.85f);
                 string mark = done ? "✓" : $"{Mathf.Min(progress, mission.Target):0}/{mission.Target}";
-                GUI.Label(new Rect(panelRect.x + 8f, y, panelW - 16f, 18f), $"{mission.Description} ({mark})", lineStyle);
-                y += 20f;
+                nestLines[i].text = $"{mission.Description} ({mark})";
             }
         }
 
-        private void DrawFeverBadge()
+        private void UpdateFeverBadge()
         {
-            var prevMatrix = GUI.matrix;
-
-            var rect = new Rect(Screen.width * 0.5f - 130f, 16f, 260f, 44f);
+            UIFactory.SetTopLeftCentered(feverRect, Screen.width * 0.5f - 130f, 16f, 260f, 44f);
             float pulse = 1f + Mathf.Sin(Time.time * 8f) * 0.06f;
-            GUIUtility.ScaleAroundPivot(new Vector2(pulse, pulse), new Vector2(rect.x + rect.width * 0.5f, rect.y + rect.height * 0.5f));
-
-            DrawRect(rect, new Color(1f, 0.25f, 0.5f));
-
-            var feverStyle = new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-            feverStyle.normal.textColor = Color.white;
-            GUI.Label(rect, $"FEVER x{fever.Multiplier:0}  {fever.TimeRemaining:0.0}s", feverStyle);
-
-            GUI.matrix = prevMatrix;
+            feverRect.localScale = new Vector3(pulse, pulse, 1f);
+            feverText.text = $"FEVER x{fever.Multiplier:0}  {fever.TimeRemaining:0.0}s";
         }
 
-        private void DrawToasts()
+        private void UpdateToasts()
         {
-            var style = new GUIStyle(GUI.skin.label) { fontSize = 26, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
             float y = Screen.height * 0.32f;
-            foreach (var t in toasts)
+            for (int i = 0; i < ToastPoolSize; i++)
             {
-                float alpha = Mathf.Clamp01(t.TimeLeft / (t.Duration * 0.4f));
-                float rise = (1f - t.TimeLeft / t.Duration) * 30f;
-                var c = t.Color;
+                if (i >= toasts.Count) { toastPool[i].gameObject.SetActive(false); continue; }
+
+                var tst = toasts[i];
+                toastPool[i].gameObject.SetActive(true);
+                float alpha = Mathf.Clamp01(tst.TimeLeft / (tst.Duration * 0.4f));
+                float rise = (1f - tst.TimeLeft / tst.Duration) * 30f;
+                var c = tst.Color;
                 c.a = alpha;
-                style.normal.textColor = c;
-                GUI.Label(new Rect(Screen.width * 0.5f - 260f, y - rise, 520f, 40f), t.Text, style);
+                toastPool[i].color = c;
+                toastPool[i].text = tst.Text;
+                UIFactory.SetTopLeftCentered((RectTransform)toastPool[i].transform, Screen.width * 0.5f - 260f, y - rise, 520f, 40f);
                 y += 34f;
             }
         }
 
-        private void DrawPickupToasts()
+        private void UpdatePickupToasts()
         {
-            if (cam == null) return;
-
-            var style = new GUIStyle(GUI.skin.label) { fontSize = 16, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-            foreach (var t in pickupToasts)
+            if (cam == null)
             {
-                Vector3 screenPos = cam.WorldToScreenPoint(t.WorldPos);
-                if (screenPos.z < 0f) continue; // behind camera, don't draw
+                for (int i = 0; i < PickupToastPoolSize; i++) pickupToastPool[i].gameObject.SetActive(false);
+                return;
+            }
 
-                float alpha = Mathf.Clamp01(t.TimeLeft / (t.Duration * 0.5f));
-                float rise = (1f - t.TimeLeft / t.Duration) * 24f;
-                var c = t.Color;
+            for (int i = 0; i < PickupToastPoolSize; i++)
+            {
+                if (i >= pickupToasts.Count) { pickupToastPool[i].gameObject.SetActive(false); continue; }
+
+                var tst = pickupToasts[i];
+                Vector3 screenPos = cam.WorldToScreenPoint(tst.WorldPos);
+                if (screenPos.z < 0f) { pickupToastPool[i].gameObject.SetActive(false); continue; }
+
+                pickupToastPool[i].gameObject.SetActive(true);
+                float alpha = Mathf.Clamp01(tst.TimeLeft / (tst.Duration * 0.5f));
+                float rise = (1f - tst.TimeLeft / tst.Duration) * 24f;
+                var c = tst.Color;
                 c.a = alpha;
-                style.normal.textColor = c;
+                pickupToastPool[i].color = c;
+                pickupToastPool[i].text = tst.Text;
 
-                float guiY = Screen.height - screenPos.y; // GUI space has y-down, screen space y-up
-                GUI.Label(new Rect(screenPos.x - 80f, guiY - rise - 20f, 160f, 26f), t.Text, style);
+                float guiY = Screen.height - screenPos.y;
+                UIFactory.SetTopLeftCentered((RectTransform)pickupToastPool[i].transform, screenPos.x - 80f, guiY - rise - 20f, 160f, 26f);
             }
         }
 
-        // Cute sun icon that rides the day-clock progress (round body, dotted
-        // rays, tiny face) -- procedural, same technique as BirdVisual's chick.
-        private Texture2D BuildSunTexture(int size)
+        // Cute sun icon that rides the day-clock progress -- same
+        // procedural pixel-drawing technique as BirdVisual's chick, now
+        // baked into a Sprite once (instead of a raw Texture2D handed to
+        // GUI.DrawTexture every OnGUI call).
+        private Sprite BuildSunSprite(int size)
         {
             var pixels = new Color[size * size];
             for (int i = 0; i < pixels.Length; i++) pixels[i] = Color.clear;
@@ -326,7 +475,7 @@ namespace FlyingChick
             var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
             tex.SetPixels(pixels);
             tex.Apply();
-            return tex;
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
         }
 
         private static void FillDot(Color[] pixels, int size, float cx, float cy, float r, Color color)
@@ -340,20 +489,6 @@ namespace FlyingChick
                         pixels[y * size + x] = color;
                 }
             }
-        }
-
-        private void DrawRect(Rect rect, Color color)
-        {
-            if (solidTex == null)
-            {
-                solidTex = new Texture2D(1, 1);
-                solidTex.SetPixel(0, 0, Color.white);
-                solidTex.Apply();
-            }
-            var prevColor = GUI.color;
-            GUI.color = color;
-            GUI.DrawTexture(rect, solidTex);
-            GUI.color = prevColor;
         }
     }
 }

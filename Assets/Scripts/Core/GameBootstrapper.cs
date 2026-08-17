@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 
 namespace FlyingChick
 {
@@ -20,7 +22,9 @@ namespace FlyingChick
     // selection, local Top-10 leaderboard + lifetime stats.
     // M7 (added so far): camera zoom-out while high above the ground; dive
     // dust + Fever star trail particles; per-island palette sky gradient +
-    // sun/moon/stars; procedurally-synthesized SFX + ambient BGM.
+    // sun/moon/stars; procedurally-synthesized SFX + ambient BGM; GC-alloc
+    // cleanup pass; OnGUI -> UGUI/TextMeshPro UI (HUD/StartScreen/
+    // DayOverScreen), which is why an EventSystem now gets created here too.
     public class GameBootstrapper : MonoBehaviour
     {
         [SerializeField] private float viewHeight = 720f;
@@ -40,6 +44,17 @@ namespace FlyingChick
             cam.transform.position = new Vector3(0f, 0f, -10f);
             cam.backgroundColor = new Color(0.98f, 0.97f, 0.85f);
             cam.clearFlags = CameraClearFlags.SolidColor;
+
+            // M7: one EventSystem for the whole scene so the UGUI canvases
+            // (HUD/StartScreen/DayOverScreen) receive clicks/taps -- routed
+            // through the New Input System (this project's Active Input
+            // Handling has legacy UnityEngine.Input disabled, see
+            // InputService), via InputSystemUIInputModule.AssignDefaultActions()
+            // so no .inputactions asset needs to exist in the project.
+            var eventSystemGO = new GameObject("EventSystem");
+            eventSystemGO.AddComponent<EventSystem>();
+            var uiInputModule = eventSystemGO.AddComponent<InputSystemUIInputModule>();
+            uiInputModule.AssignDefaultActions();
 
             // SaveSystem first: CoinWallet/BirdCollection/Leaderboard read
             // SaveSystem.Instance in their own Awake/Configure, so it must

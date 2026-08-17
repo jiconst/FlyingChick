@@ -315,10 +315,129 @@ Transform에 적용). Rigidbody2D 사용 안 함, `BirdController.FixedUpdate`�
 M3), **카메라 줌**(`FX/CameraZoom.cs`), **다이브 먼지/Fever 별 트레일**
 (`FX/BirdTrailParticles.cs`), **하늘 그라데이션/태양·달/별/섬별 10색 팔레트**
 (`FX/SkyRenderer.cs`, `FX/SkyObjects.cs`, `Terrain/IslandPalette.cs`), **사운드**
-(`Audio/`, 아래 상세). 남은 것:
-- OnGUI를 실제 UI(Canvas/TMP 또는 UI Toolkit)로 교체
-- 성능 프로파일링
+(`Audio/`, 아래 상세), **성능(정적 코드 리뷰 기반 GC 할당 제거, 아래 상세)**,
+**OnGUI → UGUI/TextMeshPro 교체(아래 상세) — 플레이 확인 필요, 특히 한글 렌더링부터** 완료.
+남은 것:
 - (스킵) 뒷배경 패럴랙스 언덕, 언덕 위 잔디 tuft — 우선순위 낮아서 생략, 필요하면 나중에
+
+### OnGUI → UGUI/TextMeshPro 교체
+사용자에게 세 가지 선택지(UGUI+TMP / UI Toolkit / 지금은 보류)를 물어봤고 **UGUI(Canvas +
+TextMeshPro)**를 골라서 이 방향으로 `UI/HUD.cs`, `UI/StartScreen.cs`, `UI/DayOverScreen.cs`
+세 화면을 전부 재작성함. `OnGUI()` 콜백이 완전히 사라지고, 대신 `Bind()` 시점에 한 번
+Canvas 계층을 코드로 만들어 두고(에디터 수동 설정 없음, 기존 원칙 유지) `Update()`에서
+텍스트/색/위치만 갱신하는 방식.
+
+- **`UI/UIFactory.cs`(신규)**: Canvas/TMP_Text/Image/Button 생성 헬퍼. 위치 지정은 일부러
+  기존 OnGUI의 `new Rect(x, y, w, h)`(원점 좌상단, y 아래로 증가) 관례를 그대로 흉내내는
+  `SetTopLeft(rt, x, y, w, h)`/`SetTopLeftCentered(...)` 헬퍼로 통일 — 그래서 각 화면의
+  포팅이 레이아웃을 새로 설계하는 게 아니라 거의 기계적인 치환(`GUI.Label(new Rect(...))` →
+  `text.text=...; UIFactory.SetTopLeft(...)`) 수준으로 끝남.
+- **`UI/UIFontProvider.cs`(신규, 가장 위험한 부분)**: TMP 텍스트에 폰트를 안 주면 기본값
+  `TMP_Settings.defaultFontAsset`을 찾는데, 이건 에디터 메뉴("Import TMP Essential
+  Resources")로 한 번 수동 설치해야 하고 그마저도 라틴 문자 전용(Liberation Sans)이라
+  이 프로젝트(한글 UI 텍스트가 대부분, 수동 에디터 설정 금지)엔 둘 다 안 맞음. 대신
+  **런타임에 macOS 시스템 폰트 파일 경로로부터 `TMP_FontAsset.CreateFontAsset(...)`을
+  다이나믹 아틀라스 모드로 직접 생성**해서 모든 `UIFactory.CreateText()` 호출에 명시적으로
+  꽂아줌 (`TMP_Settings` 기본값을 아예 안 건드려서 임포트 프롬프트 자체가 뜰 일이 없음).
+  **버그 재발 방지**: 첫 버전은 `Font.CreateDynamicFontFromOSFont(...)`로 만든 `Font`를
+  `TMP_FontAsset.CreateFontAsset(Font, ...)`에 넘기는 방식이었는데, 이게 항상
+  `NullReferenceException`으로 터짐 — `CreateFontAsset(Font)`는 내부적으로
+  `FontEngine.LoadFontFace(font, ...)`(HarfBuzz 기반)를 쓰는데 이건 실제 글리프 외곽선
+  데이터가 임베드된 폰트가 필요하고, `CreateDynamicFontFromOSFont`가 만든 `Font`는 OS 이름
+  참조만 있는 "동적 폰트"라 이 데이터가 없어서 `LoadFontFace`가 예외 없이 조용히 실패하고
+  `null`을 반환함(그다음 줄 `.name = ...`에서 NRE). **교훈: `Font.CreateDynamicFontFromOSFont`
+  로 만든 `Font`는 TMP의 런타임 SDF 생성 소스로 못 씀 — legacy dynamic-font 텍스트 렌더링
+  전용.** 고침: 실제 폰트 **파일 경로**를 바로 받는 별도 오버로드
+  (`TMP_FontAsset.CreateFontAsset(string path, int faceIndex, ...)`)로 교체 — 이건 `Font`
+  객체를 거치지 않고 경로를 FontEngine에 바로 넘겨서 정상 동작. 현재 후보 경로는
+  `/System/Library/Fonts/AppleSDGothicNeo.ttc`, `/System/Library/Fonts/Supplemental/
+  AppleGothic.ttf`(둘 다 개발 머신에서 `ls`로 존재 확인함) — 존재하는 첫 파일을 씀, 전부
+  없으면 `LegacyRuntime.ttf`(라틴 전용, 실제 임베드 데이터가 있는 진짜 폰트라 이 경로는
+  안전하게 성공함)로 폴백해서 최소한 NRE는 안 나게 함.
+  **⚠️ 이 환경에서는 실제로 Unity 에디터를 열어 검증할 방법이 없어서, 정적 코드 리뷰로만
+  만든 부분** — 이번 OnGUI→UGUI 교체 전체에서 가장 위험도가 높은 지점. **플레이 확인 시
+  한글 텍스트가 두부(tofu)/빈 사각형으로 깨지지 않는지부터 확인할 것.** 다른 Mac이나
+  Android/iOS 빌드로 넘어가면 이 경로들이 안 맞을 수 있음 — 그때는 `KoreanFontCandidates`에
+  해당 플랫폼 폰트 경로를 추가할 것.
+- **`IsBlockingClick(Rect)` 패턴 제거**: `StartScreen`이 예전엔 "아무 데나 탭하면 시작"과
+  버튼 탭이 겹치는 걸 막으려고 버튼 Rect들을 일일이 손으로 체크했는데, 실제 UGUI
+  Button/GraphicRaycaster로 바뀌면서 이 문제가 구조적으로 사라짐 — 화면 전체를 덮는 투명
+  "tap catcher" 버튼을 계층에서 맨 처음(가장 아래)에 만들어두고, 진짜 버튼들은 그 뒤에
+  만들어서 항상 그 위에 렌더링되게만 하면, UGUI가 알아서 위에 있는(나중에 그려진) 그래픽을
+  먼저 레이캐스트로 잡아줌. 아무것도 안 맞았을 때만 tap catcher가 클릭을 받아 `BeginRun()`
+  호출.
+- **`Core/InputService.cs`에 `IsSpaceDownThisFrame()`(신규) 추가**: 기존
+  `IsPointerDownThisFrame()`은 마우스/터치/스페이스바를 한데 묶어 반환했는데, 마우스/터치는
+  이제 UGUI 버튼 클릭 파이프라인을 그대로 타므로 그쪽에서 또 폴링하면 같은 클릭이 두 번
+  `BeginRun()`을 부를 수 있음. 스페이스바는 UGUI 클릭 경로가 없어서 여전히
+  `StartScreen.Update()`에서 직접 폴링 — 새 메서드로 마우스/터치 분기 없이 스페이스바만
+  분리.
+- **`Core/GameBootstrapper.cs`에 `EventSystem` + `InputSystemUIInputModule` 추가(신규)**:
+  씬 전체에 하나만 만듦. `AssignDefaultActions()`를 호출해서 `.inputactions` 에셋 없이도
+  New Input System 기반으로 UGUI 클릭/포인터 입력이 라우팅되게 함 (이 프로젝트는 레거시
+  `UnityEngine.Input`을 못 씀 — `InputService.cs` 주석 참고).
+- **토스트/픽업 토스트/미션 줄/리더보드 줄은 전부 고정 크기 풀**(`HUD`의 `toastPool`/
+  `pickupToastPool`, `StartScreen`의 `dailyLines`/`leaderboardLines`, `DayOverScreen`의
+  `statLines`/`nestLines`) — `Bind()` 시점에 미리 다 만들어두고 매 프레임 활성/비활성 +
+  텍스트만 갱신. 기존 "Instantiate/Destroy 반복 금지" 원칙(코인/구름 스포너와 동일 패턴)을
+  UI에도 그대로 적용.
+- **컴파일 에러 수정**: `UIFontProvider.cs`에서 `GlyphRenderMode`가 `TMPro`가 아니라
+  `UnityEngine.TextCore.LowLevel` 네임스페이스에 있어서 `using` 누락으로 CS0103 에러 발생 →
+  추가해서 해결 (`Library/PackageCache/com.unity.ugui@.../Runtime/TMP/TMP_FontAsset.cs`의
+  `using`을 직접 대조해서 확인). `AtlasPopulationMode`는 원래대로 `TMPro` 네임스페이스가 맞음.
+- **정정: "Import TMP Essential Resources"는 사실 필수임 — 이전 기록이 틀렸음.** 처음엔
+  콘솔 경고("TextMesh Pro Essential Resources are missing...")가 무해한 에디터 알림이라고
+  판단해서 "무시해도 됨"으로 기록했었는데, 실제로는 `NullReferenceException`으로 이어짐:
+  `TMP_FontAsset.CreateFontAssetInstance()`(우리가 어떤 방식으로 폰트를 만들든 항상 거치는
+  TMP 공통 내부 경로)가 `TMP_Settings.instance.clearDynamicDataOnBuild`를 조건 없이 읽는데,
+  `TMP_Settings.instance`는 `Resources.Load<TMP_Settings>("TMP Settings")` 조회라서 이
+  에셋이 없으면 계속 `null`이고 그 프로퍼티 접근에서 NRE남. **`UIFontProvider`가 직접 만든
+  폰트를 쓰는 것과는 무관하게, `TMP_Settings` 에셋 자체가 프로젝트에 존재해야만 TMP가
+  동작함** — `defaultFontAsset`을 실제로 쓰냐 마냐와 별개 문제였음. 코드만으로(리플렉션으로
+  private static 필드에 직접 주입 등) 우회하는 방법도 검토했지만, 사용자에게 확인 후 **정식
+  경로인 Window > TextMeshPro > Import TMP Essential Resources를 한 번 실행하는 쪽으로
+  결정** — 이 프로젝트의 "에디터 수동 설정 금지" 원칙에 대한 **명시적 예외**로 문서화함
+  (`UIFontProvider.cs` 상단 주석에도 기록). 이 임포트가 추가하는 Liberation Sans SDF는
+  라틴 전용이라 한글 렌더링에는 어차피 안 쓰임 — 우리 코드는 여전히 항상
+  `UIFontProvider.Get()`으로 직접 만든 한글 폰트를 명시적으로 꽂아줌.
+- **`Packages/manifest.json` 변경 없음**: Unity 6(`com.unity.ugui` 2.5.0)부터 TextMeshPro가
+  이 패키지에 내장돼서 `com.unity.textmeshpro`를 별도로 추가할 필요가 없음
+  (`packages-lock.json`에서 확인 — `com.unity.ugui`만 있고 별도 textmeshpro 항목 없음).
+- **`HUD`/`StartScreen`/`DayOverScreen`은 여전히 `GameBootstrapper`가 만드는 같은
+  GameObject에 컴포넌트로 붙지만, 실제 화면은 각자 `UIFactory.CreateCanvas(...)`로 만든
+  별도의 최상위 Canvas GameObject**(정렬 순서: HUD=0, StartScreen=10, DayOverScreen=20 —
+  상태가 서로 배타적이라 실제로 겹칠 일은 거의 없지만 전환 중 깜빡임 방지용 안전장치)
+
+### 성능 (정적 코드 리뷰 기반 GC 할당 제거)
+- **주의**: 이 환경에서는 Unity Profiler를 직접 붙여서 실측할 방법이 없음 — 아래는 코드를
+  읽고 "매 프레임 불필요하게 할당하는 지점"을 찾아 고친 정적 리뷰 결과이지, 프로파일러
+  실측치가 아님. 실제 프레임타임/GC spike 확인은 에디터에서 Window > Analysis > Profiler로
+  직접 확인 필요 (특히 Memory/GC Alloc 트랙).
+- **`OnGUI`의 `new GUIStyle(...)` 반복 할당**: `OnGUI`는 Unity가 프레임당 최소 2번(Layout +
+  Repaint 이벤트) 호출하는데, `HUD.cs`/`StartScreen.cs`/`DayOverScreen.cs` 전부 그릴 때마다
+  `new GUIStyle(GUI.skin.label) {...}`을 새로 만들고 있었음 → 매 프레임 다수의 GUIStyle
+  객체가 힙에 쌓였다 버려짐. **고침**: 세 파일 다 `EnsureStyles()`(최초 1회만 빌드) +
+  private 필드로 캐싱하는 패턴으로 통일. 색상만 항목마다 달라지는 경우(예:
+  `DrawNestPanel`의 미션 통과/실패 색, `DrawDailyMissions`의 완료 색)는 캐싱된 스타일의
+  `.normal.textColor`만 그때그때 바꿔씀 (스타일 객체 자체는 재사용).
+- **`StartScreen.ComputeLayout()` 중복 계산 + 배열 재할당**: 기존엔 `Update()`와 `OnGUI()`
+  양쪽에서 매번 레이아웃 전체(버튼 Rect들)를 재계산하고 있었고, `birdIconRects` 배열도 매번
+  `new Rect[...]`로 새로 만들고 있었음 — 레이아웃은 사실 `Screen.width`/`Screen.height`가
+  바뀔 때만 달라짐. **고침**: 마지막으로 계산했던 화면 크기를 기억해두고, 크기가 실제로
+  바뀌었을 때만 재계산하도록 가드 추가. `birdIconRects`도 길이가 같으면(항상 같음, 새
+  종류 수 고정) 배열을 재사용하고 내용만 덮어씀.
+- **`TerrainGenerator.RebuildMesh()`의 정점/색/인덱스 배열 매 프레임 재할당**: `LateUpdate`
+  마다(즉 매 프레임) `new Vector3[steps*2]`, `new Color[steps*2]`, `new int[(steps-1)*6]`을
+  새로 만들어서 `mesh.vertices`/`.colors`/`.triangles`에 대입하고 있었음 — 화면에 지형이
+  항상 그려지는 이 게임 특성상 가장 뜨거운 할당 지점이었을 가능성이 높음. **고침**: 재사용
+  가능한 `List<Vector3>`/`List<Color>`/`List<int>` 필드로 바꾸고, 매 프레임 `Clear()` 후
+  다시 채워서 `mesh.SetVertices/SetColors/SetTriangles`로 넘김 — `List.Clear()`는 내부
+  배열을 그대로 유지하므로, 리스트가 한 번 정상 크기까지 자란 뒤로는(줌 레벨이 안정되면
+  steps 값도 거의 고정됨) 추가 할당이 발생하지 않음.
+- **다루지 않은 것**: `string` 보간(`$"..."`,  `:N0`/`:0.0` 포맷)도 `OnGUI`/HUD 갱신마다
+  일어나는 할당원이지만, 매 프레임 텍스트가 실제로 바뀌는 UI(점수, 타이머 등)라 캐싱해도
+  이득이 적어 손대지 않음 — 진짜 문제였던 "매 프레임 똑같은 값을 다시 할당"하는 지점
+  (GUIStyle, 지형 배열) 위주로만 고침.
 
 ### 사운드 (`Audio/ProceduralAudio.cs`, `Audio/AudioManager.cs`)
 - **실제 오디오 파일은 이 환경에서 만들거나 구할 방법이 없어서, 지금까지의 프로시저럴
@@ -430,10 +549,13 @@ M3), **카메라 줌**(`FX/CameraZoom.cs`), **다이브 먼지/Fever 별 트레�
 6. **M6 — 컬렉션**: ✅ 구현 완료 (2026-08-17). 새 5종 + Perk(`BirdPool`/`BirdCollection`), 알
    가챠(500코인), 홈 화면 새 선택 줄, 로컬 Top 10 리더보드(`Leaderboard`). **여기서 M5+M6
    둘 다 플레이 확인 필요 — 확인 후 M7 진행.**
-7. **M7 — 폴리시**: 🚧 진행 중. 카메라 줌, 다이브 먼지/Fever 별 트레일, 하늘 그라데이션/
-   태양·달·별/섬별 10색 팔레트, **프로시저럴 합성 사운드**(`Audio/`, 신호음 수준 — 실제
-   오디오 에셋 아님) 완료 — **플레이 확인 필요**. 남은 것: OnGUI→실제 UI 교체, 성능
-   프로파일링
+7. **M7 — 폴리시**: 🚧 진행 중, 계획된 항목은 전부 구현 완료. 카메라 줌, 다이브 먼지/Fever
+   별 트레일, 하늘 그라데이션/태양·달·별/섬별 10색 팔레트, **프로시저럴 합성 사운드**
+   (`Audio/`, 신호음 수준 — 실제 오디오 에셋 아님), **성능(GC 할당 정적 리뷰 기반 제거)**,
+   **OnGUI→UGUI/TextMeshPro 교체**(`UI/UIFactory.cs`/`UI/UIFontProvider.cs` 신규) 완료 —
+   **전부 플레이 확인 필요** (M7 항목 전체가 아직 사용자가 직접 플레이 확인 안 함). UI
+   교체분은 특히 **한글 텍스트 렌더링(`UIFontProvider`)부터 확인할 것** — 정적 리뷰로만
+   만든 가장 위험한 부분.
 
 ## 하지 말 것
 
@@ -476,8 +598,24 @@ M3), **카메라 줌**(`FX/CameraZoom.cs`), **다이브 먼지/Fever 별 트레�
 - [ ] "기록 보기" 패널에 Top 10 점수, 총 슬라이드, 총 비행일 수가 맞는지, 여러 런 이후
       순위가 정렬되는지 (M6)
 - [ ] 60fps 유지
+- [ ] **한글 UI 텍스트가 전부 정상 렌더링되는지**(두부/빈 사각형 없이) — `UIFontProvider`의
+      런타임 폰트 생성이 실제로 동작하는지 확인하는 가장 중요한 체크 (M7)
+- [ ] 시작 화면에서 빈 곳 탭/클릭/스페이스바 전부 런 시작이 되는지, 버튼(기록 보기/알
+      구매/새 아이콘/닫기) 위를 탭했을 때는 시작되지 않는지 (M7 — tap catcher 레이어링 검증)
+- [ ] Day Over 화면 "다시하기"/"홈" 버튼이 정상 동작하는지, Nest 목표 통과/실패 표시가
+      맞는지 (M7 — UGUI 포팅 후 재확인)
+- [ ] 창 크기/해상도를 바꿔도 HUD·시작 화면 요소들이 화면 밖으로 안 나가는지 (M7 — 새로
+      생긴 리사이즈 가드 로직 검증)
 
 ## 실행 방법
+
+**필수 1회 에디터 설정 (M7부터, "에디터 수동 설정 금지" 원칙의 명시적 예외)**: Play하기 전에
+**Window > TextMeshPro > Import TMP Essential Resources**를 한 번 실행해야 함. TMP 내부
+코드가 `TMP_Settings` 에셋의 존재 자체를 조건 없이 전제해서, 이게 없으면 우리가 직접 만든
+런타임 폰트(`UIFontProvider`)를 쓰든 안 쓰든 상관없이 `NullReferenceException`이 남 — 자세한
+경위는 `UIFontProvider.cs` 상단 주석과 위 "OnGUI → UGUI/TextMeshPro 교체" 절 참고. 이때
+같이 설치되는 Liberation Sans SDF는 라틴 전용이라 한글 텍스트에는 안 쓰임(우리 코드는 항상
+자체 한글 폰트를 명시적으로 꽂음).
 
 빈 GameObject에 `GameBootstrapper` 컴포넌트만 붙이고 Play — 카메라/지형/새/점수 시스템/HUD/
 낮밤 사이클/시작·종료 화면이 전부 런타임에 코드로 조립된다.

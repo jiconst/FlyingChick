@@ -1,14 +1,29 @@
+using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace FlyingChick
 {
     // Reference: title overlay shown in state 'start'; any click/tap/space
     // begins the run -- EXCEPT when the tap lands on one of this screen's
-    // own buttons (bird icons, egg purchase, leaderboard toggle), which now
-    // exist as of M6. OnGUI-based like the rest of the current UI --
-    // Canvas/TMP is a later visual pass.
+    // own buttons (bird icons, egg purchase, leaderboard toggle), which
+    // exist as of M6.
+    //
+    // M7: converted from OnGUI to a runtime-built UGUI/TextMeshPro
+    // hierarchy. The old "tap anywhere to start" needed a hand-rolled
+    // IsBlockingClick(Rect) check to avoid double-firing on top of buttons;
+    // with real UGUI buttons that problem disappears structurally -- a
+    // full-screen transparent "tap catcher" Button sits behind everything
+    // else (built first, so later siblings render on top and intercept
+    // clicks first), and it only ever receives a click when nothing else
+    // was hit. Mouse/touch reach it through normal UGUI click routing;
+    // space bar has no UGUI click path so it's still polled directly via
+    // InputService.IsSpaceDownThisFrame().
     public class StartScreen : MonoBehaviour
     {
+        private const int MaxDailyMissionLines = 5;
+        private const int MaxLeaderboardLines = 12;
+
         private CoinWallet wallet;
         private DailyMissions dailyMissions;
         private BirdCollection collection;
@@ -18,11 +33,30 @@ namespace FlyingChick
         private bool showLeaderboard;
         private string hatchMessage;
         private float hatchMessageTimeLeft;
-        private Texture2D[] birdIconTextures;
-        private Rect[] birdIconRects = new Rect[0];
-        private Rect eggButtonRect;
-        private Rect leaderboardToggleRect;
-        private Rect leaderboardPanelRect;
+
+        private GameObject root;
+        private GameObject baseContent;
+        private GameObject leaderboardGroup;
+
+        private RectTransform titleRect, sub1Rect, sub2Rect;
+        private TextMeshProUGUI bestText;
+        private TextMeshProUGUI coinsText;
+        private Button eggButton;
+        private TextMeshProUGUI eggButtonText;
+        private TextMeshProUGUI hatchText;
+        private TextMeshProUGUI birdNameText;
+
+        private Button[] birdButtons;
+        private Image[] birdSelectionBorders;
+        private TextMeshProUGUI[] birdLockTexts;
+        private RectTransform[] birdIconRects;
+
+        private GameObject dailyPanel;
+        private TextMeshProUGUI[] dailyLines;
+
+        private TextMeshProUGUI[] leaderboardLines;
+
+        private int lastWidth = -1, lastHeight = -1;
 
         public void Bind(CoinWallet walletRef, DailyMissions dailyMissionsRef, BirdCollection collectionRef, Leaderboard leaderboardRef, AudioManager audioRef)
         {
@@ -31,258 +65,372 @@ namespace FlyingChick
             collection = collectionRef;
             leaderboard = leaderboardRef;
             audio = audioRef;
+
+            BuildUI();
+        }
+
+        private void BuildUI()
+        {
+            var canvas = UIFactory.CreateCanvas("StartScreen Canvas", 10);
+            root = canvas.gameObject;
+            var t = canvas.transform;
+
+            var overlay = UIFactory.CreatePanel(t, "Overlay", new Color(1f, 0.97f, 0.87f, 0.55f));
+            UIFactory.StretchFull((RectTransform)overlay.transform);
+
+            var tapCatcher = UIFactory.CreateFullScreenTapCatcher(t, "TapCatcher");
+            tapCatcher.onClick.AddListener(() => GameManager.Instance.BeginRun());
+
+            baseContent = UIFactory.CreateChild(t, "BaseContent").gameObject;
+            BuildBaseContent(baseContent.transform);
+
+            leaderboardGroup = UIFactory.CreateChild(t, "LeaderboardGroup").gameObject;
+            BuildLeaderboardGroup(leaderboardGroup.transform);
+            leaderboardGroup.SetActive(false);
+
+            lastWidth = Screen.width;
+            lastHeight = Screen.height;
+            ReflowLayout();
+        }
+
+        private void BuildBaseContent(Transform parent)
+        {
+            var brown = new Color(0.42f, 0.29f, 0.12f);
+
+            var title = UIFactory.CreateText(parent, "Title", 48, new Color(0.36f, 0.24f, 0.1f), TextAlignmentOptions.Center, FontStyles.Bold);
+            titleRect = (RectTransform)title.transform;
+            title.text = "Flying Chick";
+
+            var sub1 = UIFactory.CreateText(parent, "Sub1", 18, brown, TextAlignmentOptions.Center);
+            sub1Rect = (RectTransform)sub1.transform;
+            sub1.text = "내리막에서 눌러 다이빙, 오르막에서 발사!";
+
+            var sub2 = UIFactory.CreateText(parent, "Sub2", 18, brown, TextAlignmentOptions.Center);
+            sub2Rect = (RectTransform)sub2.transform;
+            sub2.text = "터치 / 클릭 / 스페이스바로 시작";
+
+            bestText = UIFactory.CreateText(parent, "Best", 18, brown, TextAlignmentOptions.Center);
+
+            coinsText = UIFactory.CreateText(parent, "Coins", 18, new Color(0.85f, 0.6f, 0.1f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+
+            var leaderboardToggle = UIFactory.CreateButton(parent, "LeaderboardToggle", "기록 보기", 15, brown, out _);
+            leaderboardToggle.onClick.AddListener(() =>
+            {
+                baseContent.SetActive(false);
+                leaderboardGroup.SetActive(true);
+                audio?.PlayClick();
+            });
+
+            eggButton = UIFactory.CreateButton(parent, "EggButton", "", 15, brown, out eggButtonText);
+            eggButton.onClick.AddListener(OnEggButtonClicked);
+
+            hatchText = UIFactory.CreateText(parent, "HatchMessage", 15, new Color(1f, 0.6f, 0.15f), TextAlignmentOptions.Center, FontStyles.Bold);
+            hatchText.gameObject.SetActive(false);
+
+            birdNameText = UIFactory.CreateText(parent, "BirdName", 13, brown, TextAlignmentOptions.Center);
+
+            BuildBirdRow(parent);
+            BuildDailyMissionsPanel(parent);
+        }
+
+        private void BuildBirdRow(Transform parent)
+        {
+            var birds = BirdPool.All;
+            int n = birds.Length;
+            birdButtons = new Button[n];
+            birdSelectionBorders = new Image[n];
+            birdLockTexts = new TextMeshProUGUI[n];
+            birdIconRects = new RectTransform[n];
+
+            for (int i = 0; i < n; i++)
+            {
+                var border = UIFactory.CreatePanel(parent, $"BirdBorder{i}", Color.white);
+                birdSelectionBorders[i] = border;
+
+                var iconSprite = ProceduralSprite.CreateCircle(40, birds[i].BodyColor);
+                var iconRt = UIFactory.CreateChild(parent, $"BirdIcon{i}");
+                birdIconRects[i] = iconRt;
+                var iconImg = iconRt.gameObject.AddComponent<Image>();
+                iconImg.sprite = iconSprite;
+
+                var btn = iconRt.gameObject.AddComponent<Button>();
+                btn.targetGraphic = iconImg;
+                btn.navigation = new Navigation { mode = Navigation.Mode.None };
+                birdButtons[i] = btn;
+
+                int captured = i;
+                btn.onClick.AddListener(() => OnBirdClicked(captured));
+
+                var lockText = UIFactory.CreateText(iconRt, "Lock", 20, Color.white, TextAlignmentOptions.Center, FontStyles.Bold);
+                UIFactory.StretchFull((RectTransform)lockText.transform);
+                lockText.text = "?";
+                lockText.raycastTarget = false;
+                birdLockTexts[i] = lockText;
+            }
+        }
+
+        private void BuildDailyMissionsPanel(Transform parent)
+        {
+            var panel = UIFactory.CreatePanel(parent, "DailyMissionsPanel", new Color(0f, 0f, 0f, 0.3f));
+            dailyPanel = panel.gameObject;
+
+            var header = UIFactory.CreateText(panel.transform, "DailyHeader", 15, Color.white, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            UIFactory.SetTopLeft((RectTransform)header.transform, 10f, 4f, 240f, 20f);
+            header.text = "오늘의 미션";
+
+            dailyLines = new TextMeshProUGUI[MaxDailyMissionLines];
+            for (int i = 0; i < MaxDailyMissionLines; i++)
+            {
+                var line = UIFactory.CreateText(panel.transform, $"DailyLine{i}", 13, new Color(1f, 1f, 1f, 0.85f));
+                UIFactory.SetTopLeft((RectTransform)line.transform, 10f, 26f + i * 22f, 240f, 20f);
+                dailyLines[i] = line;
+            }
+        }
+
+        private void BuildLeaderboardGroup(Transform parent)
+        {
+            var backdrop = UIFactory.CreatePanel(parent, "Backdrop", new Color(0f, 0f, 0f, 0f));
+            backdrop.raycastTarget = true;
+            UIFactory.StretchFull((RectTransform)backdrop.transform);
+
+            var panel = UIFactory.CreatePanel(parent, "Panel", new Color(0.15f, 0.1f, 0.08f, 0.9f));
+            var panelRect = (RectTransform)panel.transform;
+
+            var header = UIFactory.CreateText(panel.transform, "Header", 24, Color.white, TextAlignmentOptions.Center, FontStyles.Bold);
+            UIFactory.SetTopLeft((RectTransform)header.transform, 0f, 14f, 440f, 34f);
+            header.text = "기록";
+
+            leaderboardLines = new TextMeshProUGUI[MaxLeaderboardLines];
+            for (int i = 0; i < MaxLeaderboardLines; i++)
+            {
+                var line = UIFactory.CreateText(panel.transform, $"Line{i}", 16, new Color(1f, 1f, 1f, 0.9f));
+                UIFactory.SetTopLeft((RectTransform)line.transform, 24f, 56f + i * 24f, 392f, 22f);
+                leaderboardLines[i] = line;
+            }
+
+            var closeButton = UIFactory.CreateButton(panel.transform, "CloseButton", "닫기", 16, new Color(0.3f, 0.2f, 0.1f), out _);
+            UIFactory.SetTopLeftCentered((RectTransform)closeButton.transform, 220f - 60f, 480f - 50f, 120f, 36f);
+            closeButton.onClick.AddListener(() =>
+            {
+                leaderboardGroup.SetActive(false);
+                baseContent.SetActive(true);
+                audio?.PlayClick();
+            });
+
+            UIFactory.SetTopLeftCentered(panelRect, 0f, 0f, 440f, 480f); // repositioned in Update to stay screen-centered
+        }
+
+        private void OnBirdClicked(int index)
+        {
+            var birds = BirdPool.All;
+            if (!collection.IsOwned(birds[index].Id)) return;
+            collection.Select(birds[index].Id);
+            audio?.PlayClick();
+        }
+
+        private void OnEggButtonClicked()
+        {
+            bool allOwned = collection.OwnedBirdIds.Count >= BirdPool.All.Length;
+            if (allOwned) return;
+
+            audio?.PlayClick();
+            var hatched = collection.BuyEgg();
+            if (hatched.HasValue)
+            {
+                hatchMessage = $"부화! {hatched.Value.Name} 획득";
+                hatchMessageTimeLeft = 2.5f;
+            }
+            // null means funds were short -- button just stays available.
         }
 
         private void Update()
         {
-            if (hatchMessageTimeLeft > 0f)
-            {
-                hatchMessageTimeLeft -= Time.deltaTime;
-            }
+            if (hatchMessageTimeLeft > 0f) hatchMessageTimeLeft -= Time.deltaTime;
 
             var gm = GameManager.Instance;
-            if (gm.State != GameState.Start) return;
+            bool active = gm.State == GameState.Start;
+            if (root.activeSelf != active) root.SetActive(active);
+            if (!active) return;
 
-            ComputeLayout();
-
-            if (InputService.IsPointerDownThisFrame())
+            if (Screen.width != lastWidth || Screen.height != lastHeight)
             {
-                Vector2 pos = InputService.PointerPosition();
-                Vector2 guiPos = new Vector2(pos.x, Screen.height - pos.y);
-                if (!IsBlockingClick(guiPos))
-                    gm.BeginRun();
+                lastWidth = Screen.width;
+                lastHeight = Screen.height;
+                ReflowLayout();
             }
+
+            RefreshContent();
+
+            if (InputService.IsSpaceDownThisFrame())
+                gm.BeginRun();
         }
 
-        private void OnGUI()
+        // Repositions everything whose placement depends on Screen.width/
+        // height -- only runs when the resolution actually changed (window
+        // resize / orientation change), not every frame.
+        private void ReflowLayout()
         {
-            if (GameManager.Instance.State != GameState.Start) return;
-
-            ComputeLayout();
-            DrawOverlay();
-
-            if (showLeaderboard)
-            {
-                DrawLeaderboard();
-                return;
-            }
-
-            var titleStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 48,
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter
-            };
-            titleStyle.normal.textColor = new Color(0.36f, 0.24f, 0.1f);
-
-            var subStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 18,
-                alignment = TextAnchor.MiddleCenter
-            };
-            subStyle.normal.textColor = new Color(0.42f, 0.29f, 0.12f);
-
             float cx = Screen.width * 0.5f;
             float cy = Screen.height * 0.5f;
 
-            GUI.Label(new Rect(cx - 300f, cy - 150f, 600f, 60f), "Flying Chick", titleStyle);
-            GUI.Label(new Rect(cx - 300f, cy - 80f, 600f, 30f), "내리막에서 눌러 다이빙, 오르막에서 발사!", subStyle);
-            GUI.Label(new Rect(cx - 300f, cy - 50f, 600f, 30f), "터치 / 클릭 / 스페이스바로 시작", subStyle);
+            UIFactory.SetTopLeftCentered(titleRect, cx - 300f, cy - 150f, 600f, 60f);
+            UIFactory.SetTopLeftCentered(sub1Rect, cx - 300f, cy - 80f, 600f, 30f);
+            UIFactory.SetTopLeftCentered(sub2Rect, cx - 300f, cy - 50f, 600f, 30f);
 
-            if (SaveSystem.Instance != null && SaveSystem.Instance.BestScore > 0)
-                GUI.Label(new Rect(cx - 300f, cy - 10f, 600f, 26f), $"Best: {SaveSystem.Instance.BestScore:N0}", subStyle);
+            UIFactory.SetTopLeftCentered((RectTransform)coinsText.transform, Screen.width - 160f, 16f, 140f, 26f);
+            var leaderboardToggle = baseContent.transform.Find("LeaderboardToggle");
+            if (leaderboardToggle != null) UIFactory.SetTopLeft((RectTransform)leaderboardToggle, Screen.width - 160f, 48f, 140f, 26f);
 
-            if (wallet != null)
-            {
-                var coinStyle = new GUIStyle(GUI.skin.label) { fontSize = 18, fontStyle = FontStyle.Bold };
-                coinStyle.normal.textColor = new Color(0.85f, 0.6f, 0.1f);
-                GUI.Label(new Rect(Screen.width - 160f, 16f, 140f, 26f), $"Coins: {wallet.Coins:N0}", coinStyle);
-            }
-
-            if (GUI.Button(leaderboardToggleRect, "기록 보기"))
-            {
-                showLeaderboard = true;
-                audio?.PlayClick();
-            }
-
-            if (dailyMissions != null) DrawDailyMissions();
-            if (collection != null) DrawBirdRow();
-        }
-
-        private void ComputeLayout()
-        {
-            leaderboardToggleRect = new Rect(Screen.width - 160f, 48f, 140f, 26f);
-            eggButtonRect = new Rect(Screen.width * 0.5f - 100f, Screen.height - 56f, 200f, 40f);
-            leaderboardPanelRect = new Rect(Screen.width * 0.5f - 220f, Screen.height * 0.5f - 240f, 440f, 480f);
+            UIFactory.SetTopLeftCentered((RectTransform)eggButton.transform, cx - 100f, Screen.height - 56f, 200f, 40f);
+            UIFactory.SetTopLeftCentered((RectTransform)hatchText.transform, cx - 200f, Screen.height - 82f, 400f, 22f);
+            UIFactory.SetTopLeftCentered((RectTransform)bestText.transform, cx - 300f, cy - 10f, 600f, 26f);
 
             var birds = BirdPool.All;
             const float iconSize = 46f, spacing = 10f;
             float totalW = birds.Length * iconSize + (birds.Length - 1) * spacing;
-            float startX = Screen.width * 0.5f - totalW * 0.5f;
+            float startX = cx - totalW * 0.5f;
             float y = Screen.height - 116f;
 
-            birdIconRects = new Rect[birds.Length];
             for (int i = 0; i < birds.Length; i++)
-                birdIconRects[i] = new Rect(startX + i * (iconSize + spacing), y, iconSize, iconSize);
+            {
+                float x = startX + i * (iconSize + spacing);
+                UIFactory.SetTopLeft(birdIconRects[i], x, y, iconSize, iconSize);
+                UIFactory.SetTopLeft((RectTransform)birdSelectionBorders[i].transform, x - 3f, y - 3f, iconSize + 6f, iconSize + 6f);
+            }
+            UIFactory.SetTopLeftCentered((RectTransform)birdNameText.transform, cx - 300f, y - 22f, 600f, 20f);
+
+            const float dailyPanelW = 260f;
+            float dailyPanelH = 26f + MaxDailyMissionLines * 24f;
+            UIFactory.SetTopLeft((RectTransform)dailyPanel.transform, 16f, Screen.height - dailyPanelH - 16f, dailyPanelW, dailyPanelH);
+
+            var leaderboardPanel = leaderboardGroup.transform.Find("Panel");
+            if (leaderboardPanel != null)
+                UIFactory.SetTopLeftCentered((RectTransform)leaderboardPanel, cx - 220f, cy - 240f, 440f, 480f);
         }
 
-        private bool IsBlockingClick(Vector2 guiPos)
+        private void RefreshContent()
         {
-            if (showLeaderboard) return true; // whole screen is the leaderboard while it's open
+            if (SaveSystem.Instance != null && SaveSystem.Instance.BestScore > 0)
+            {
+                bestText.gameObject.SetActive(true);
+                bestText.text = $"Best: {SaveSystem.Instance.BestScore:N0}";
+            }
+            else
+            {
+                bestText.gameObject.SetActive(false);
+            }
 
-            if (leaderboardToggleRect.Contains(guiPos)) return true;
-            if (eggButtonRect.Contains(guiPos)) return true;
-            foreach (var r in birdIconRects)
-                if (r.Contains(guiPos)) return true;
-            return false;
+            if (wallet != null)
+            {
+                coinsText.gameObject.SetActive(true);
+                coinsText.text = $"Coins: {wallet.Coins:N0}";
+            }
+
+            showLeaderboard = leaderboardGroup.activeSelf;
+
+            if (!showLeaderboard)
+            {
+                RefreshBirdRow();
+                RefreshDailyMissions();
+            }
+            else
+            {
+                RefreshLeaderboard();
+            }
         }
 
-        private void DrawBirdRow()
+        private void RefreshBirdRow()
         {
+            if (collection == null) return;
+
             var birds = BirdPool.All;
             for (int i = 0; i < birds.Length; i++)
             {
-                var rect = birdIconRects[i];
                 bool owned = collection.IsOwned(birds[i].Id);
                 bool selected = collection.SelectedBirdId == birds[i].Id;
 
-                if (selected)
-                    DrawSolidRect(new Rect(rect.x - 3f, rect.y - 3f, rect.width + 6f, rect.height + 6f), Color.white);
-
-                var prevColor = GUI.color;
-                GUI.color = owned ? Color.white : new Color(0.35f, 0.35f, 0.35f, 0.85f);
-                bool clicked = GUI.Button(rect, GetBirdIconTexture(i));
-                GUI.color = prevColor;
-
-                if (!owned)
-                {
-                    var lockStyle = new GUIStyle(GUI.skin.label) { fontSize = 20, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-                    lockStyle.normal.textColor = Color.white;
-                    GUI.Label(rect, "?", lockStyle);
-                }
-                else if (clicked)
-                {
-                    collection.Select(birds[i].Id);
-                    audio?.PlayClick();
-                }
+                birdSelectionBorders[i].gameObject.SetActive(selected);
+                birdButtons[i].image.color = owned ? Color.white : new Color(0.35f, 0.35f, 0.35f, 0.85f);
+                birdLockTexts[i].gameObject.SetActive(!owned);
             }
 
-            var nameStyle = new GUIStyle(GUI.skin.label) { fontSize = 13, alignment = TextAnchor.MiddleCenter };
-            nameStyle.normal.textColor = new Color(0.42f, 0.29f, 0.12f);
             var selectedBird = collection.SelectedBird;
-            string perkText = selectedBird.Perk == PerkType.None ? selectedBird.Name : $"{selectedBird.Name} · {selectedBird.PerkDescription}";
-            GUI.Label(new Rect(Screen.width * 0.5f - 300f, birdIconRects[0].y - 22f, 600f, 20f), perkText, nameStyle);
+            birdNameText.text = selectedBird.Perk == PerkType.None ? selectedBird.Name : $"{selectedBird.Name} · {selectedBird.PerkDescription}";
 
-            var eggStyle = new GUIStyle(GUI.skin.button) { fontSize = 15 };
             bool allOwned = collection.OwnedBirdIds.Count >= BirdPool.All.Length;
-            GUI.enabled = !allOwned;
-            if (GUI.Button(eggButtonRect, allOwned ? "새를 모두 모았어요" : $"알 구매 ({BirdPool.EggCostCoins} 코인)", eggStyle))
-            {
-                audio?.PlayClick();
-                var hatched = collection.BuyEgg();
-                if (hatched.HasValue)
-                {
-                    hatchMessage = $"부화! {hatched.Value.Name} 획득";
-                    hatchMessageTimeLeft = 2.5f;
-                }
-                // null means funds were short -- button just stays available.
-            }
-            GUI.enabled = true;
+            eggButton.interactable = !allOwned;
+            eggButtonText.text = allOwned ? "새를 모두 모았어요" : $"알 구매 ({BirdPool.EggCostCoins} 코인)";
 
             if (hatchMessageTimeLeft > 0f)
             {
-                var hatchStyle = new GUIStyle(GUI.skin.label) { fontSize = 15, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-                hatchStyle.normal.textColor = new Color(1f, 0.6f, 0.15f);
-                GUI.Label(new Rect(Screen.width * 0.5f - 200f, eggButtonRect.y - 26f, 400f, 22f), hatchMessage, hatchStyle);
+                hatchText.gameObject.SetActive(true);
+                hatchText.text = hatchMessage;
+            }
+            else
+            {
+                hatchText.gameObject.SetActive(false);
             }
         }
 
-        private Texture2D GetBirdIconTexture(int index)
+        private void RefreshDailyMissions()
         {
-            if (birdIconTextures == null) birdIconTextures = new Texture2D[BirdPool.All.Length];
-            if (birdIconTextures[index] == null)
-                birdIconTextures[index] = ProceduralSprite.CreateCircle(40, BirdPool.All[index].BodyColor).texture;
-            return birdIconTextures[index];
-        }
-
-        private void DrawLeaderboard()
-        {
-            DrawSolidRect(leaderboardPanelRect, new Color(0.15f, 0.1f, 0.08f, 0.9f));
-
-            var headerStyle = new GUIStyle(GUI.skin.label) { fontSize = 24, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-            headerStyle.normal.textColor = Color.white;
-            GUI.Label(new Rect(leaderboardPanelRect.x, leaderboardPanelRect.y + 14f, leaderboardPanelRect.width, 34f), "기록", headerStyle);
-
-            var lineStyle = new GUIStyle(GUI.skin.label) { fontSize = 16 };
-            lineStyle.normal.textColor = new Color(1f, 1f, 1f, 0.9f);
-
-            float y = leaderboardPanelRect.y + 56f;
-            if (leaderboard != null)
+            if (dailyMissions == null)
             {
-                var scores = leaderboard.TopScores;
-                if (scores.Count == 0)
-                {
-                    GUI.Label(new Rect(leaderboardPanelRect.x + 24f, y, leaderboardPanelRect.width - 48f, 24f), "아직 기록이 없어요", lineStyle);
-                    y += 26f;
-                }
-                for (int i = 0; i < scores.Count; i++)
-                {
-                    GUI.Label(new Rect(leaderboardPanelRect.x + 24f, y, leaderboardPanelRect.width - 48f, 22f), $"{i + 1}.  {scores[i]:N0}", lineStyle);
-                    y += 24f;
-                }
-
-                y += 12f;
-                GUI.Label(new Rect(leaderboardPanelRect.x + 24f, y, leaderboardPanelRect.width - 48f, 22f), $"총 슬라이드: {leaderboard.TotalSlidesAllTime:N0}", lineStyle);
-                y += 24f;
-                GUI.Label(new Rect(leaderboardPanelRect.x + 24f, y, leaderboardPanelRect.width - 48f, 22f), $"총 비행일 수: {leaderboard.TotalRuns:N0}", lineStyle);
+                dailyPanel.SetActive(false);
+                return;
             }
 
-            var closeStyle = new GUIStyle(GUI.skin.button) { fontSize = 16 };
-            if (GUI.Button(new Rect(leaderboardPanelRect.x + leaderboardPanelRect.width * 0.5f - 60f, leaderboardPanelRect.yMax - 50f, 120f, 36f), "닫기", closeStyle))
+            dailyPanel.SetActive(true);
+            var missions = dailyMissions.ActiveMissions;
+            for (int i = 0; i < MaxDailyMissionLines; i++)
             {
-                showLeaderboard = false;
-                audio?.PlayClick();
-            }
-        }
+                if (i >= missions.Length) { dailyLines[i].gameObject.SetActive(false); continue; }
 
-        private void DrawSolidRect(Rect rect, Color color)
-        {
-            var prevColor = GUI.color;
-            GUI.color = color;
-            GUI.DrawTexture(rect, Texture2D.whiteTexture);
-            GUI.color = prevColor;
-        }
-
-        private void DrawDailyMissions()
-        {
-            const float panelW = 260f;
-            float panelH = 26f + dailyMissions.ActiveMissions.Length * 24f;
-            var panelRect = new Rect(16f, Screen.height - panelH - 16f, panelW, panelH);
-            DrawSolidRect(panelRect, new Color(0f, 0f, 0f, 0.3f));
-
-            var headerStyle = new GUIStyle(GUI.skin.label) { fontSize = 15, fontStyle = FontStyle.Bold };
-            headerStyle.normal.textColor = Color.white;
-            GUI.Label(new Rect(panelRect.x + 10f, panelRect.y + 4f, panelW - 20f, 20f), "오늘의 미션", headerStyle);
-
-            var lineStyle = new GUIStyle(GUI.skin.label) { fontSize = 13 };
-            float y = panelRect.y + 26f;
-            for (int i = 0; i < dailyMissions.ActiveMissions.Length; i++)
-            {
-                var mission = dailyMissions.ActiveMissions[i];
+                dailyLines[i].gameObject.SetActive(true);
                 bool done = dailyMissions.Completed[i];
-                lineStyle.normal.textColor = done ? new Color(0.5f, 1f, 0.5f) : new Color(1f, 1f, 1f, 0.85f);
-                string mark = done ? "✓" : $"{dailyMissions.Progress[i]}/{mission.Target}";
-                GUI.Label(new Rect(panelRect.x + 10f, y, panelW - 20f, 20f), $"{mission.Description} ({mark})", lineStyle);
-                y += 22f;
+                dailyLines[i].color = done ? new Color(0.5f, 1f, 0.5f) : new Color(1f, 1f, 1f, 0.85f);
+                string mark = done ? "✓" : $"{dailyMissions.Progress[i]}/{missions[i].Target}";
+                dailyLines[i].text = $"{missions[i].Description} ({mark})";
             }
         }
 
-        private void DrawOverlay()
+        private void RefreshLeaderboard()
         {
-            var prevColor = GUI.color;
-            GUI.color = new Color(1f, 0.97f, 0.87f, 0.55f);
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
-            GUI.color = prevColor;
+            if (leaderboard == null) return;
+
+            var scores = leaderboard.TopScores;
+            int line = 0;
+
+            if (scores.Count == 0)
+            {
+                leaderboardLines[line].gameObject.SetActive(true);
+                leaderboardLines[line].text = "아직 기록이 없어요";
+                line++;
+            }
+            else
+            {
+                for (int i = 0; i < scores.Count && line < MaxLeaderboardLines; i++, line++)
+                {
+                    leaderboardLines[line].gameObject.SetActive(true);
+                    leaderboardLines[line].text = $"{i + 1}.  {scores[i]:N0}";
+                }
+            }
+
+            if (line < MaxLeaderboardLines)
+            {
+                leaderboardLines[line].gameObject.SetActive(true);
+                leaderboardLines[line].text = $"총 슬라이드: {leaderboard.TotalSlidesAllTime:N0}";
+                line++;
+            }
+            if (line < MaxLeaderboardLines)
+            {
+                leaderboardLines[line].gameObject.SetActive(true);
+                leaderboardLines[line].text = $"총 비행일 수: {leaderboard.TotalRuns:N0}";
+                line++;
+            }
+
+            for (; line < MaxLeaderboardLines; line++)
+                leaderboardLines[line].gameObject.SetActive(false);
         }
     }
 }

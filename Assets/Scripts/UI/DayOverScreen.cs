@@ -1,4 +1,6 @@
+using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace FlyingChick
 {
@@ -8,8 +10,18 @@ namespace FlyingChick
     //
     // M5 additions: coins earned this run (CoinWallet), and pass/fail for
     // this run's 3 Nest Multiplier objectives (NestMultiplier).
+    //
+    // M7: converted from OnGUI to a runtime-built UGUI/TextMeshPro
+    // hierarchy. This screen is only shown while idle between runs (never
+    // during active gameplay), so unlike HUD/StartScreen it just
+    // recomputes its whole layout every frame it's visible rather than
+    // gating on a resize check -- simpler and not worth the extra
+    // bookkeeping here.
     public class DayOverScreen : MonoBehaviour
     {
+        private const int StatLineCount = 7;
+        private const int MaxNestLines = 5;
+
         private ScoreManager score;
         private SlideJudge slideJudge;
         private CloudSpawner cloudSpawner;
@@ -21,6 +33,15 @@ namespace FlyingChick
 
         private bool submittedThisRun;
         private bool isNewBest;
+
+        private GameObject root;
+        private TextMeshProUGUI titleText;
+        private TextMeshProUGUI bestBadgeText;
+        private readonly TextMeshProUGUI[] statLines = new TextMeshProUGUI[StatLineCount];
+        private TextMeshProUGUI nestHeaderText;
+        private readonly TextMeshProUGUI[] nestLines = new TextMeshProUGUI[MaxNestLines];
+        private Button restartButton;
+        private Button homeButton;
 
         public void Bind(ScoreManager scoreRef, SlideJudge slideJudgeRef, CloudSpawner cloudSpawnerRef, FeverSystem feverRef, GameManager gameManagerRef, CoinWallet walletRef, NestMultiplier nestRef, AudioManager audioRef)
         {
@@ -34,6 +55,8 @@ namespace FlyingChick
             audio = audioRef;
 
             gameManager.OnRunStart += HandleRunStart;
+
+            BuildUI();
         }
 
         private void OnDestroy()
@@ -44,39 +67,70 @@ namespace FlyingChick
 
         private void HandleRunStart() => submittedThisRun = false;
 
+        private void BuildUI()
+        {
+            var canvas = UIFactory.CreateCanvas("DayOverScreen Canvas", 20);
+            root = canvas.gameObject;
+            var t = canvas.transform;
+
+            var overlay = UIFactory.CreatePanel(t, "Overlay", new Color(0.1f, 0.05f, 0.15f, 0.6f));
+            UIFactory.StretchFull((RectTransform)overlay.transform);
+
+            titleText = UIFactory.CreateText(t, "Title", 36, new Color(0.32f, 0.2f, 0.36f), TextAlignmentOptions.Center, FontStyles.Bold);
+            titleText.text = "해가 졌어요";
+
+            bestBadgeText = UIFactory.CreateText(t, "BestBadge", 16, new Color(1f, 0.55f, 0.15f), TextAlignmentOptions.Center, FontStyles.Bold);
+            bestBadgeText.text = "NEW HIGHSCORE!";
+
+            var statColor = new Color(0.32f, 0.2f, 0.2f);
+            for (int i = 0; i < StatLineCount; i++)
+                statLines[i] = UIFactory.CreateText(t, $"Stat{i}", 18, statColor, TextAlignmentOptions.Center);
+
+            nestHeaderText = UIFactory.CreateText(t, "NestHeader", 16, new Color(0.42f, 0.29f, 0.12f), TextAlignmentOptions.Center, FontStyles.Bold);
+
+            for (int i = 0; i < MaxNestLines; i++)
+                nestLines[i] = UIFactory.CreateText(t, $"NestLine{i}", 15, Color.white, TextAlignmentOptions.Center);
+
+            restartButton = UIFactory.CreateButton(t, "RestartButton", "다시하기", 20, new Color(0.3f, 0.2f, 0.1f), out _);
+            restartButton.onClick.AddListener(() =>
+            {
+                audio?.PlayClick();
+                gameManager.BeginRun();
+            });
+
+            homeButton = UIFactory.CreateButton(t, "HomeButton", "홈", 20, new Color(0.3f, 0.2f, 0.1f), out _);
+            homeButton.onClick.AddListener(() =>
+            {
+                audio?.PlayClick();
+                gameManager.ReturnToStart();
+            });
+        }
+
         private void Update()
         {
-            if (gameManager.State != GameState.DayOver) return;
+            bool active = gameManager.State == GameState.DayOver;
+            if (root.activeSelf != active) root.SetActive(active);
+            if (!active) return;
 
             if (!submittedThisRun)
             {
                 isNewBest = SaveSystem.Instance != null && SaveSystem.Instance.SubmitScore(score.Score);
                 submittedThisRun = true;
             }
+
+            Layout();
         }
 
-        private void OnGUI()
+        private void Layout()
         {
-            if (gameManager.State != GameState.DayOver) return;
-
-            DrawOverlay();
-
             float cx = Screen.width * 0.5f;
             float cy = Screen.height * 0.5f;
 
-            var titleStyle = new GUIStyle(GUI.skin.label) { fontSize = 36, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-            titleStyle.normal.textColor = new Color(0.32f, 0.2f, 0.36f);
-            GUI.Label(new Rect(cx - 300f, cy - 210f, 600f, 46f), "해가 졌어요", titleStyle);
+            UIFactory.SetTopLeftCentered((RectTransform)titleText.transform, cx - 300f, cy - 210f, 600f, 46f);
 
+            bestBadgeText.gameObject.SetActive(isNewBest);
             if (isNewBest)
-            {
-                var bestStyle = new GUIStyle(GUI.skin.label) { fontSize = 16, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-                bestStyle.normal.textColor = new Color(1f, 0.55f, 0.15f);
-                GUI.Label(new Rect(cx - 300f, cy - 170f, 600f, 24f), "NEW HIGHSCORE!", bestStyle);
-            }
-
-            var statStyle = new GUIStyle(GUI.skin.label) { fontSize = 18, alignment = TextAnchor.MiddleCenter };
-            statStyle.normal.textColor = new Color(0.32f, 0.2f, 0.2f);
+                UIFactory.SetTopLeftCentered((RectTransform)bestBadgeText.transform, cx - 300f, cy - 170f, 600f, 24f);
 
             string[] lines =
             {
@@ -90,54 +144,48 @@ namespace FlyingChick
             };
 
             float y = cy - 140f;
-            foreach (var line in lines)
+            for (int i = 0; i < StatLineCount; i++)
             {
-                GUI.Label(new Rect(cx - 300f, y, 600f, 24f), line, statStyle);
+                statLines[i].text = lines[i];
+                UIFactory.SetTopLeftCentered((RectTransform)statLines[i].transform, cx - 300f, y, 600f, 24f);
                 y += 24f;
             }
 
-            if (nest != null) y = DrawNestObjectives(cx, y + 8f);
+            if (nest != null) y = LayoutNestObjectives(cx, y + 8f);
+            else
+            {
+                nestHeaderText.gameObject.SetActive(false);
+                for (int i = 0; i < MaxNestLines; i++) nestLines[i].gameObject.SetActive(false);
+            }
 
-            var btnStyle = new GUIStyle(GUI.skin.button) { fontSize = 20, fontStyle = FontStyle.Bold };
             float btnY = Mathf.Max(y + 16f, cy + 130f);
-            if (GUI.Button(new Rect(cx - 170f, btnY, 150f, 46f), "다시하기", btnStyle))
-            {
-                audio?.PlayClick();
-                gameManager.BeginRun();
-            }
-            if (GUI.Button(new Rect(cx + 20f, btnY, 150f, 46f), "홈", btnStyle))
-            {
-                audio?.PlayClick();
-                gameManager.ReturnToStart();
-            }
+            UIFactory.SetTopLeftCentered((RectTransform)restartButton.transform, cx - 170f, btnY, 150f, 46f);
+            UIFactory.SetTopLeftCentered((RectTransform)homeButton.transform, cx + 20f, btnY, 150f, 46f);
         }
 
-        private float DrawNestObjectives(float cx, float y)
+        private float LayoutNestObjectives(float cx, float y)
         {
-            var headerStyle = new GUIStyle(GUI.skin.label) { fontSize = 16, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-            headerStyle.normal.textColor = new Color(0.42f, 0.29f, 0.12f);
-            GUI.Label(new Rect(cx - 300f, y, 600f, 22f), $"Nest Multiplier (+{nest.Bonus})", headerStyle);
+            nestHeaderText.gameObject.SetActive(true);
+            nestHeaderText.text = $"Nest Multiplier (+{nest.Bonus})";
+            UIFactory.SetTopLeftCentered((RectTransform)nestHeaderText.transform, cx - 300f, y, 600f, 22f);
             y += 24f;
 
-            var lineStyle = new GUIStyle(GUI.skin.label) { fontSize = 15, alignment = TextAnchor.MiddleCenter };
-            foreach (var mission in nest.ActiveMissions)
+            var missions = nest.ActiveMissions;
+            for (int i = 0; i < MaxNestLines; i++)
             {
+                if (i >= missions.Length) { nestLines[i].gameObject.SetActive(false); continue; }
+
+                nestLines[i].gameObject.SetActive(true);
+                var mission = missions[i];
                 bool passed = nest.GetProgress(mission) >= mission.Target;
-                lineStyle.normal.textColor = passed ? new Color(0.2f, 0.55f, 0.2f) : new Color(0.55f, 0.2f, 0.2f);
+                nestLines[i].color = passed ? new Color(0.2f, 0.55f, 0.2f) : new Color(0.55f, 0.2f, 0.2f);
                 string mark = passed ? "✓" : "✗";
-                GUI.Label(new Rect(cx - 300f, y, 600f, 22f), $"{mark} {mission.Description}", lineStyle);
+                nestLines[i].text = $"{mark} {mission.Description}";
+                UIFactory.SetTopLeftCentered((RectTransform)nestLines[i].transform, cx - 300f, y, 600f, 22f);
                 y += 22f;
             }
 
             return y;
-        }
-
-        private void DrawOverlay()
-        {
-            var prevColor = GUI.color;
-            GUI.color = new Color(0.1f, 0.05f, 0.15f, 0.6f);
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
-            GUI.color = prevColor;
         }
     }
 }

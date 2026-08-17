@@ -28,6 +28,17 @@ namespace FlyingChick
             return Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame;
         }
 
+        // Keyboard-only variant of IsPointerDownThisFrame's space-bar branch.
+        // M7: once the start screen's tap-anywhere-to-start became a real
+        // UGUI full-screen button, mouse/touch already reach it through
+        // normal UI click routing -- polling IsPointerDownThisFrame there
+        // too would fire BeginRun() twice for the same click. Space bar has
+        // no UGUI click path, so it still needs to be polled directly.
+        public static bool IsSpaceDownThisFrame()
+        {
+            return Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame;
+        }
+
         // Unity screen space (origin bottom-left, y-up). Used by StartScreen
         // (M6) to tell a "start the run" tap from a tap on a UI button --
         // OnGUI's Rect space is y-down, so callers need
