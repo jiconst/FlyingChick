@@ -38,5 +38,12 @@ namespace FlyingChick
         // for this hobby project's threat model, flagged as a future
         // hardening item (Keychain/Keystore) if it ever matters.
         public string authToken = "";
+
+        // 사운드 설정 (설정 화면). 기본값은 AudioManager의 기존 SerializeField
+        // 기본값(sfxVolume=0.6f, bgmVolume=0.16f)과 동일하게 맞춤 — 새 세이브
+        // 파일에는 이 키가 없으므로 JsonUtility가 이 필드 초기값을 그대로
+        // 씀(기존 language/nickname 필드와 같은 패턴).
+        public float musicVolume = 0.16f;
+        public float sfxVolume = 0.6f;
     }
 }

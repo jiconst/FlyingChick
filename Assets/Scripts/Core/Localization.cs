@@ -66,7 +66,6 @@ namespace FlyingChick
 
         private static readonly Dictionary<string, (string ko, string en)> Table = new Dictionary<string, (string ko, string en)>
         {
-            ["start.subtitle1"] = ("내리막에서 눌러 다이빙, 오르막에서 발사!", "Hold on downhills to dive, release at the peak to launch!"),
             ["start.subtitle2"] = ("터치 / 클릭 / 스페이스바로 시작", "Tap / click / press space to start"),
             ["start.leaderboardButton"] = ("기록 보기", "Leaderboard"),
             ["start.eggButtonBuy"] = ("알 구매 ({0} 코인)", "Buy Egg ({0} coins)"),
@@ -85,6 +84,27 @@ namespace FlyingChick
             ["auth.signupButton"] = ("회원가입", "Sign Up"),
             ["auth.loginIdLabel"] = ("아이디", "ID"),
             ["auth.passwordLabel"] = ("비밀번호", "Password"),
+
+            // 메인 메뉴 (게임플레이/설정/게임 방법/기록 4개 버튼) 및 하위 화면들.
+            ["menu.play"] = ("게임플레이", "Play"),
+            ["menu.settings"] = ("설정", "Settings"),
+            ["menu.howToPlay"] = ("게임 방법", "How to Play"),
+            ["menu.back"] = ("뒤로", "Back"),
+
+            ["settings.music"] = ("음악", "Music"),
+            ["settings.sfx"] = ("효과음", "Sound Effects"),
+
+            ["howtoplay.body"] = (
+                "내리막에서 화면을 누르고 있으면 병아리가 빠르게 하강합니다.\n" +
+                "오르막 정상 부근에서 손을 떼면 하늘로 발사됩니다.\n\n" +
+                "다이빙 직후 착지에 성공하면 'Great Slide'! 3번 연속 성공하면 Fever가 발동해 점수가 2배가 됩니다.\n\n" +
+                "노란 코인과 파란 스피드 코인을 모으고, 공중에 떠 있을 때 구름을 터치하면 추가 점수를 얻습니다.\n" +
+                "섬을 하나 통과할 때마다 점수 배수가 올라갑니다.",
+                "Hold the screen while going downhill to dive.\n" +
+                "Release near the top of a hill to launch into the air.\n\n" +
+                "Land right after diving to score a Great Slide! Three in a row triggers Fever Mode, doubling your score.\n\n" +
+                "Collect yellow coins and blue speed coins, and touch clouds while airborne for bonus points.\n" +
+                "Each island you pass increases your score multiplier."),
 
             ["dayover.title"] = ("해가 졌어요", "The sun has set"),
             ["dayover.restart"] = ("다시하기", "Play Again"),

@@ -30,8 +30,47 @@ namespace FlyingChick
         private GameManager gameManager;
         private DayCycle dayCycle;
 
+        // 설정 화면에서 슬라이더로 조절 가능한 볼륨. sfxVolume/bgmVolume은 아직
+        // 직렬화 필드로 남겨서 인스펙터 초기값 용도로만 쓰고, 실제 재생 볼륨은
+        // 저장된 값(LoadSavedVolumes)이 로드된 뒤 값을 그대로 씀.
+        public float MusicVolume => bgmVolume;
+        public float SfxVolume => sfxVolume;
+
+        public void SetMusicVolume(float value)
+        {
+            bgmVolume = Mathf.Clamp01(value);
+            if (bgmSource != null) bgmSource.volume = bgmVolume;
+            PersistVolumes();
+        }
+
+        public void SetSfxVolume(float value)
+        {
+            sfxVolume = Mathf.Clamp01(value);
+            PersistVolumes();
+        }
+
+        private void LoadSavedVolumes()
+        {
+            if (SaveSystem.Instance == null) return;
+            var data = SaveSystem.Instance.Data;
+            bgmVolume = data.musicVolume;
+            sfxVolume = data.sfxVolume;
+        }
+
+        private void PersistVolumes()
+        {
+            if (SaveSystem.Instance == null) return;
+            SaveSystem.Instance.Data.musicVolume = bgmVolume;
+            SaveSystem.Instance.Data.sfxVolume = sfxVolume;
+            SaveSystem.Instance.Save();
+        }
+
         private void Awake()
         {
+            // 오디오 소스를 만들기 전에 저장된 볼륨부터 불러와야 bgmSource.volume에
+            // 인스펙터 기본값이 아니라 저장된 값이 반영됨.
+            LoadSavedVolumes();
+
             sfxSources = new AudioSource[sfxSourceCount];
             for (int i = 0; i < sfxSourceCount; i++)
             {

@@ -4,35 +4,26 @@ using UnityEngine.UI;
 
 namespace FlyingChick
 {
-    // Reference: title overlay shown in state 'start'; any click/tap/space
-    // begins the run -- EXCEPT when the tap lands on one of this screen's
-    // own buttons (bird icons, egg purchase, leaderboard toggle), which
-    // exist as of M6.
+    // 시작 화면. GameState.Start일 때만 보임. 메인 메뉴(타이틀 + 4개 버튼) +
+    // 4개 하위 화면(게임플레이/설정/게임 방법/기록)으로 구성 — currentPanel
+    // 하나로 어떤 화면이 떠 있는지 관리하고, SwitchTo()로만 전환함.
     //
-    // M7: converted from OnGUI to a runtime-built UGUI/TextMeshPro
-    // hierarchy. The old "tap anywhere to start" needed a hand-rolled
-    // IsBlockingClick(Rect) check to avoid double-firing on top of buttons;
-    // with real UGUI buttons that problem disappears structurally -- a
-    // full-screen transparent "tap catcher" Button sits behind everything
-    // else (built first, so later siblings render on top and intercept
-    // clicks first), and it only ever receives a click when nothing else
-    // was hit. Mouse/touch reach it through normal UGUI click routing;
-    // space bar has no UGUI click path so it's still polled directly via
-    // InputService.IsSpaceDownThisFrame() (skipped while the nickname field
-    // has focus, so typing a space into a nickname doesn't also start a run).
+    // "빈 곳 탭하면 시작" 동작은 게임플레이 화면에서만 필요하므로, tap
+    // catcher를 캔버스 루트가 아니라 playGroup의 자식으로 만듦 — playGroup이
+    // 비활성화되면 tap catcher도 같이 없어지니 별도 상태 체크가 필요 없음
+    // (버튼이 tap catcher보다 나중 형제로 그려져서 위에 있는 걸 먼저 받는
+    // 원리는 기존과 동일). 마우스/터치는 이 방식으로 자동 처리되고,
+    // 스페이스바는 UGUI 클릭 경로가 없어서 Update()에서 currentPanel ==
+    // Panel.Play일 때만 직접 폴링함.
     //
-    // Post-M7: nickname (top-left, editable TMP_InputField + reroll button,
-    // PlayerProfile) and a Korean/English language toggle (top-right, next
-    // to the coin/leaderboard buttons). Most of this screen's text was
-    // already refreshed every frame in RefreshContent() and friends, so it
-    // automatically picks up a language change; the handful of labels that
-    // were only ever set once in Build*() are re-applied by
-    // RefreshStaticLabels(), called once at build time and again whenever
-    // Localization.OnLanguageChanged fires.
+    // 로그인/회원가입 폼, 기록(리더보드) 패널은 기존 구조를 그대로 재사용 —
+    // 다만 여닫히는 지점만 메인 메뉴 기준으로 바뀜.
     public class StartScreen : MonoBehaviour
     {
         private const int MaxDailyMissionLines = 5;
         private const int MaxLeaderboardLines = 12;
+
+        private enum Panel { MainMenu, Play, Settings, HowToPlay, Leaderboard }
 
         private CoinWallet wallet;
         private DailyMissions dailyMissions;
@@ -42,44 +33,37 @@ namespace FlyingChick
         private PlayerProfile profile;
         private AuthService auth;
 
-        private bool showLeaderboard;
+        private Panel currentPanel = Panel.MainMenu;
         private string hatchMessage;
         private float hatchMessageTimeLeft;
 
         private GameObject root;
-        private GameObject baseContent;
+        private GameObject mainMenuGroup;
+        private GameObject playGroup;
+        private GameObject settingsGroup;
+        private GameObject howToPlayGroup;
         private GameObject leaderboardGroup;
+        private GameObject authFormGroup;
 
-        private RectTransform titleRect, sub1Rect, sub2Rect;
-        private TextMeshProUGUI sub1Text, sub2Text;
+        // 메인 메뉴
+        private RectTransform titleRect;
         private TextMeshProUGUI bestText;
+        private Button playButton, settingsButton, howToPlayButton, leaderboardMenuButton;
+        private TextMeshProUGUI playButtonText, settingsButtonText, howToPlayButtonText, leaderboardMenuButtonText;
+
+        // 게임플레이 화면
+        private RectTransform hintRect;
+        private TextMeshProUGUI hintText;
         private TextMeshProUGUI coinsText;
         private Button eggButton;
         private TextMeshProUGUI eggButtonText;
         private TextMeshProUGUI hatchText;
         private TextMeshProUGUI birdNameText;
-
         private TMP_InputField nicknameField;
         private Button rerollButton;
         private TextMeshProUGUI rerollButtonText;
-        private Button languageToggleButton;
-        private TextMeshProUGUI languageToggleText;
-
-        private Button leaderboardToggleButton;
-        private TextMeshProUGUI leaderboardToggleText;
-
-        // Online account (FlyingChick-Server, optional -- see AuthService).
-        // authStatusButton doubles as both the "log in" entry point (logged
-        // out) and the "log out" action (logged in, showing the server
-        // nickname in its own label) so only one button slot is needed.
-        private GameObject authFormGroup;
-        private Button authStatusButton;
-        private TextMeshProUGUI authStatusButtonText;
-        private TextMeshProUGUI authLoginIdLabelText, authPasswordLabelText;
-        private TMP_InputField authLoginIdField, authPasswordField;
-        private TextMeshProUGUI authErrorText;
-        private Button authLoginButton, authSignupButton, authCloseButton;
-        private TextMeshProUGUI authLoginButtonText, authSignupButtonText, authCloseButtonText;
+        private Button playBackButton;
+        private TextMeshProUGUI playBackButtonText;
 
         private Button[] birdButtons;
         private Image[] birdSelectionBorders;
@@ -90,10 +74,34 @@ namespace FlyingChick
         private TextMeshProUGUI dailyHeaderText;
         private TextMeshProUGUI[] dailyLines;
 
+        // 설정 화면
+        private TextMeshProUGUI musicLabelText, sfxLabelText;
+        private Slider musicSlider, sfxSlider;
+        private Button languageToggleButton;
+        private TextMeshProUGUI languageToggleText;
+        private Button authStatusButton;
+        private TextMeshProUGUI authStatusButtonText;
+        private Button settingsBackButton;
+        private TextMeshProUGUI settingsBackButtonText;
+
+        // 게임 방법 화면
+        private TextMeshProUGUI howToPlayTitleText;
+        private TextMeshProUGUI howToPlayBodyText;
+        private Button howToPlayBackButton;
+        private TextMeshProUGUI howToPlayBackButtonText;
+
+        // 기록(리더보드) — 기존 그대로
         private TextMeshProUGUI leaderboardHeaderText;
         private TextMeshProUGUI[] leaderboardLines;
         private Button leaderboardCloseButton;
         private TextMeshProUGUI leaderboardCloseText;
+
+        // 로그인/회원가입 폼 — 기존 그대로, 설정 화면에서 열림
+        private TextMeshProUGUI authLoginIdLabelText, authPasswordLabelText;
+        private TMP_InputField authLoginIdField, authPasswordField;
+        private TextMeshProUGUI authErrorText;
+        private Button authLoginButton, authSignupButton, authCloseButton;
+        private TextMeshProUGUI authLoginButtonText, authSignupButtonText, authCloseButtonText;
 
         private int lastWidth = -1, lastHeight = -1;
 
@@ -155,15 +163,20 @@ namespace FlyingChick
             var overlay = UIFactory.CreatePanel(t, "Overlay", new Color(1f, 0.97f, 0.87f, 0.55f));
             UIFactory.StretchFull((RectTransform)overlay.transform);
 
-            var tapCatcher = UIFactory.CreateFullScreenTapCatcher(t, "TapCatcher");
-            tapCatcher.onClick.AddListener(() => GameManager.Instance.BeginRun());
+            mainMenuGroup = UIFactory.CreateChild(t, "MainMenuGroup").gameObject;
+            BuildMainMenu(mainMenuGroup.transform);
 
-            baseContent = UIFactory.CreateChild(t, "BaseContent").gameObject;
-            BuildBaseContent(baseContent.transform);
+            playGroup = UIFactory.CreateChild(t, "PlayGroup").gameObject;
+            BuildPlayPanel(playGroup.transform);
+
+            settingsGroup = UIFactory.CreateChild(t, "SettingsGroup").gameObject;
+            BuildSettingsPanel(settingsGroup.transform);
+
+            howToPlayGroup = UIFactory.CreateChild(t, "HowToPlayGroup").gameObject;
+            BuildHowToPlayPanel(howToPlayGroup.transform);
 
             leaderboardGroup = UIFactory.CreateChild(t, "LeaderboardGroup").gameObject;
             BuildLeaderboardGroup(leaderboardGroup.transform);
-            leaderboardGroup.SetActive(false);
 
             authFormGroup = UIFactory.CreateChild(t, "AuthFormGroup").gameObject;
             BuildAuthFormGroup(authFormGroup.transform);
@@ -173,9 +186,22 @@ namespace FlyingChick
             lastHeight = Screen.height;
             ReflowLayout();
             RefreshStaticLabels();
+            SwitchTo(Panel.MainMenu);
         }
 
-        private void BuildBaseContent(Transform parent)
+        // 다섯 그룹(메인메뉴/게임플레이/설정/게임방법/기록) 중 하나만 활성화 —
+        // authFormGroup은 이 상태 머신과 별개로 설정 화면 위에 뜨는 모달.
+        private void SwitchTo(Panel panel)
+        {
+            currentPanel = panel;
+            mainMenuGroup.SetActive(panel == Panel.MainMenu);
+            playGroup.SetActive(panel == Panel.Play);
+            settingsGroup.SetActive(panel == Panel.Settings);
+            howToPlayGroup.SetActive(panel == Panel.HowToPlay);
+            leaderboardGroup.SetActive(panel == Panel.Leaderboard);
+        }
+
+        private void BuildMainMenu(Transform parent)
         {
             var brown = new Color(0.42f, 0.29f, 0.12f);
 
@@ -183,40 +209,37 @@ namespace FlyingChick
             titleRect = (RectTransform)title.transform;
             title.text = "Flying Chick";
 
-            sub1Text = UIFactory.CreateText(parent, "Sub1", 18, brown, TextAlignmentOptions.Center);
-            sub1Rect = (RectTransform)sub1Text.transform;
-
-            sub2Text = UIFactory.CreateText(parent, "Sub2", 18, brown, TextAlignmentOptions.Center);
-            sub2Rect = (RectTransform)sub2Text.transform;
-
             bestText = UIFactory.CreateText(parent, "Best", 18, brown, TextAlignmentOptions.Center);
+
+            playButton = UIFactory.CreateButton(parent, "PlayButton", "", 20, brown, out playButtonText);
+            playButton.onClick.AddListener(() => { audio?.PlayClick(); SwitchTo(Panel.Play); });
+
+            settingsButton = UIFactory.CreateButton(parent, "SettingsButton", "", 20, brown, out settingsButtonText);
+            settingsButton.onClick.AddListener(() => { audio?.PlayClick(); SwitchTo(Panel.Settings); });
+
+            howToPlayButton = UIFactory.CreateButton(parent, "HowToPlayButton", "", 20, brown, out howToPlayButtonText);
+            howToPlayButton.onClick.AddListener(() => { audio?.PlayClick(); SwitchTo(Panel.HowToPlay); });
+
+            leaderboardMenuButton = UIFactory.CreateButton(parent, "LeaderboardMenuButton", "", 20, brown, out leaderboardMenuButtonText);
+            leaderboardMenuButton.onClick.AddListener(() => { audio?.PlayClick(); SwitchTo(Panel.Leaderboard); });
+        }
+
+        private void BuildPlayPanel(Transform parent)
+        {
+            var brown = new Color(0.42f, 0.29f, 0.12f);
+
+            var tapCatcher = UIFactory.CreateFullScreenTapCatcher(parent, "TapCatcher");
+            tapCatcher.onClick.AddListener(() => GameManager.Instance.BeginRun());
+
+            hintText = UIFactory.CreateText(parent, "Hint", 18, brown, TextAlignmentOptions.Center);
+            hintRect = (RectTransform)hintText.transform;
+
+            playBackButton = UIFactory.CreateButton(parent, "PlayBackButton", "", 15, brown, out playBackButtonText);
+            playBackButton.onClick.AddListener(() => { audio?.PlayClick(); SwitchTo(Panel.MainMenu); });
 
             coinsText = UIFactory.CreateText(parent, "Coins", 18, new Color(0.85f, 0.6f, 0.1f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
 
             BuildNicknameRow(parent, brown);
-
-            leaderboardToggleButton = UIFactory.CreateButton(parent, "LeaderboardToggle", "", 15, brown, out leaderboardToggleText);
-            leaderboardToggleButton.onClick.AddListener(() =>
-            {
-                baseContent.SetActive(false);
-                leaderboardGroup.SetActive(true);
-                audio?.PlayClick();
-            });
-
-            languageToggleButton = UIFactory.CreateButton(parent, "LanguageToggle", "", 15, brown, out languageToggleText);
-            languageToggleButton.onClick.AddListener(() =>
-            {
-                Localization.Current = Localization.Current == Language.Korean ? Language.English : Language.Korean;
-                audio?.PlayClick();
-            });
-
-            authStatusButton = UIFactory.CreateButton(parent, "AuthStatusButton", "", 15, brown, out authStatusButtonText);
-            authStatusButton.onClick.AddListener(() =>
-            {
-                audio?.PlayClick();
-                if (auth != null && auth.IsLoggedIn) auth.Logout();
-                else authFormGroup.SetActive(true);
-            });
 
             eggButton = UIFactory.CreateButton(parent, "EggButton", "", 15, brown, out eggButtonText);
             eggButton.onClick.AddListener(OnEggButtonClicked);
@@ -301,6 +324,49 @@ namespace FlyingChick
             }
         }
 
+        private void BuildSettingsPanel(Transform parent)
+        {
+            var brown = new Color(0.42f, 0.29f, 0.12f);
+
+            musicLabelText = UIFactory.CreateText(parent, "MusicLabel", 16, brown);
+            musicSlider = UIFactory.CreateSlider(parent, "MusicSlider", audio != null ? audio.MusicVolume : 0.16f);
+            musicSlider.onValueChanged.AddListener(v => audio?.SetMusicVolume(v));
+
+            sfxLabelText = UIFactory.CreateText(parent, "SfxLabel", 16, brown);
+            sfxSlider = UIFactory.CreateSlider(parent, "SfxSlider", audio != null ? audio.SfxVolume : 0.6f);
+            sfxSlider.onValueChanged.AddListener(v => audio?.SetSfxVolume(v));
+
+            languageToggleButton = UIFactory.CreateButton(parent, "LanguageToggle", "", 15, brown, out languageToggleText);
+            languageToggleButton.onClick.AddListener(() =>
+            {
+                Localization.Current = Localization.Current == Language.Korean ? Language.English : Language.Korean;
+                audio?.PlayClick();
+            });
+
+            authStatusButton = UIFactory.CreateButton(parent, "AuthStatusButton", "", 15, brown, out authStatusButtonText);
+            authStatusButton.onClick.AddListener(() =>
+            {
+                audio?.PlayClick();
+                if (auth != null && auth.IsLoggedIn) auth.Logout();
+                else authFormGroup.SetActive(true);
+            });
+
+            settingsBackButton = UIFactory.CreateButton(parent, "SettingsBackButton", "", 15, brown, out settingsBackButtonText);
+            settingsBackButton.onClick.AddListener(() => { audio?.PlayClick(); SwitchTo(Panel.MainMenu); });
+        }
+
+        private void BuildHowToPlayPanel(Transform parent)
+        {
+            var brown = new Color(0.42f, 0.29f, 0.12f);
+
+            howToPlayTitleText = UIFactory.CreateText(parent, "Title", 32, new Color(0.36f, 0.24f, 0.1f), TextAlignmentOptions.Center, FontStyles.Bold);
+
+            howToPlayBodyText = UIFactory.CreateText(parent, "Body", 16, brown, TextAlignmentOptions.TopLeft);
+
+            howToPlayBackButton = UIFactory.CreateButton(parent, "HowToPlayBackButton", "", 15, brown, out howToPlayBackButtonText);
+            howToPlayBackButton.onClick.AddListener(() => { audio?.PlayClick(); SwitchTo(Panel.MainMenu); });
+        }
+
         private void BuildLeaderboardGroup(Transform parent)
         {
             var backdrop = UIFactory.CreatePanel(parent, "Backdrop", new Color(0f, 0f, 0f, 0f));
@@ -325,19 +391,17 @@ namespace FlyingChick
             UIFactory.SetTopLeftCentered((RectTransform)leaderboardCloseButton.transform, 220f - 60f, 480f - 50f, 120f, 36f);
             leaderboardCloseButton.onClick.AddListener(() =>
             {
-                leaderboardGroup.SetActive(false);
-                baseContent.SetActive(true);
                 audio?.PlayClick();
+                SwitchTo(Panel.MainMenu);
             });
 
-            UIFactory.SetTopLeftCentered(panelRect, 0f, 0f, 440f, 480f); // repositioned in Update to stay screen-centered
+            UIFactory.SetTopLeftCentered(panelRect, 0f, 0f, 440f, 480f); // ReflowLayout에서 화면 중앙으로 재배치됨
         }
 
-        // Combined login/signup form -- one pair of fields, two action
-        // buttons. All child positions here are relative to the panel's own
-        // rect (its top-left corner), same convention as
-        // BuildLeaderboardGroup -- only the panel itself gets recentered on
-        // resize (see ReflowLayout), its children never move relative to it.
+        // 로그인/회원가입 폼 — 필드 하나(아이디+비밀번호)를 두 버튼이 같이 씀.
+        // 자식 위치는 전부 이 패널 자신의 rect 기준(패널만 ReflowLayout에서
+        // 화면 중앙으로 재배치되고, 자식들은 안 움직임) — BuildLeaderboardGroup과
+        // 같은 관례.
         private void BuildAuthFormGroup(Transform parent)
         {
             var backdrop = UIFactory.CreatePanel(parent, "Backdrop", new Color(0f, 0f, 0f, 0f));
@@ -390,7 +454,7 @@ namespace FlyingChick
                 audio?.PlayClick();
             });
 
-            UIFactory.SetTopLeftCentered(panelRect, 0f, 0f, 360f, 324f); // repositioned in ReflowLayout to stay screen-centered
+            UIFactory.SetTopLeftCentered(panelRect, 0f, 0f, 360f, 324f); // ReflowLayout에서 화면 중앙으로 재배치됨
         }
 
         private void OnBirdClicked(int index)
@@ -413,7 +477,7 @@ namespace FlyingChick
                 hatchMessage = string.Format(Localization.Get("start.hatchMessage"), hatched.Value.Name);
                 hatchMessageTimeLeft = 2.5f;
             }
-            // null means funds were short -- button just stays available.
+            // null이면 코인이 부족했다는 뜻 — 버튼은 그대로 눌러볼 수 있게 둠.
         }
 
         private void Update()
@@ -437,33 +501,59 @@ namespace FlyingChick
             bool typing = (nicknameField != null && nicknameField.isFocused)
                 || (authLoginIdField != null && authLoginIdField.isFocused)
                 || (authPasswordField != null && authPasswordField.isFocused);
-            if (!typing && InputService.IsSpaceDownThisFrame())
+            if (currentPanel == Panel.Play && !typing && InputService.IsSpaceDownThisFrame())
                 gm.BeginRun();
         }
 
-        // Repositions everything whose placement depends on Screen.width/
-        // height -- only runs when the resolution actually changed (window
-        // resize / orientation change), not every frame.
+        // 화면 크기가 실제로 바뀔 때만 호출됨(리사이즈/화면 회전) — 매 프레임
+        // 아님.
         private void ReflowLayout()
         {
             float cx = Screen.width * 0.5f;
             float cy = Screen.height * 0.5f;
 
-            UIFactory.SetTopLeftCentered(titleRect, cx - 300f, cy - 150f, 600f, 60f);
-            UIFactory.SetTopLeftCentered(sub1Rect, cx - 300f, cy - 80f, 600f, 30f);
-            UIFactory.SetTopLeftCentered(sub2Rect, cx - 300f, cy - 50f, 600f, 30f);
+            ReflowMainMenu(cx, cy);
+            ReflowPlayPanel(cx, cy);
+            ReflowSettingsPanel(cx, cy);
+            ReflowHowToPlayPanel(cx, cy);
+
+            var leaderboardPanel = leaderboardGroup.transform.Find("Panel");
+            if (leaderboardPanel != null)
+                UIFactory.SetTopLeftCentered((RectTransform)leaderboardPanel, cx - 220f, cy - 240f, 440f, 480f);
+
+            var authPanel = authFormGroup.transform.Find("Panel");
+            if (authPanel != null)
+                UIFactory.SetTopLeftCentered((RectTransform)authPanel, cx - 180f, cy - 162f, 360f, 324f);
+        }
+
+        private void ReflowMainMenu(float cx, float cy)
+        {
+            UIFactory.SetTopLeftCentered(titleRect, cx - 300f, cy - 220f, 600f, 60f);
+            UIFactory.SetTopLeftCentered((RectTransform)bestText.transform, cx - 300f, cy - 150f, 600f, 26f);
+
+            const float btnW = 260f, btnH = 52f, gap = 16f;
+            float y = cy - 90f;
+            UIFactory.SetTopLeftCentered((RectTransform)playButton.transform, cx - btnW * 0.5f, y, btnW, btnH);
+            y += btnH + gap;
+            UIFactory.SetTopLeftCentered((RectTransform)settingsButton.transform, cx - btnW * 0.5f, y, btnW, btnH);
+            y += btnH + gap;
+            UIFactory.SetTopLeftCentered((RectTransform)howToPlayButton.transform, cx - btnW * 0.5f, y, btnW, btnH);
+            y += btnH + gap;
+            UIFactory.SetTopLeftCentered((RectTransform)leaderboardMenuButton.transform, cx - btnW * 0.5f, y, btnW, btnH);
+        }
+
+        private void ReflowPlayPanel(float cx, float cy)
+        {
+            UIFactory.SetTopLeftCentered(hintRect, cx - 300f, 60f, 600f, 30f);
 
             UIFactory.SetTopLeft((RectTransform)nicknameField.transform, 16f, 16f, 180f, 32f);
             UIFactory.SetTopLeft((RectTransform)rerollButton.transform, 204f, 16f, 64f, 32f);
 
             UIFactory.SetTopLeftCentered((RectTransform)coinsText.transform, Screen.width - 160f, 16f, 140f, 26f);
-            UIFactory.SetTopLeft((RectTransform)leaderboardToggleButton.transform, Screen.width - 160f, 48f, 140f, 26f);
-            UIFactory.SetTopLeft((RectTransform)languageToggleButton.transform, Screen.width - 160f, 80f, 140f, 26f);
-            UIFactory.SetTopLeft((RectTransform)authStatusButton.transform, Screen.width - 160f, 112f, 140f, 26f);
+            UIFactory.SetTopLeft((RectTransform)playBackButton.transform, Screen.width - 160f, 48f, 140f, 26f);
 
             UIFactory.SetTopLeftCentered((RectTransform)eggButton.transform, cx - 100f, Screen.height - 56f, 200f, 40f);
             UIFactory.SetTopLeftCentered((RectTransform)hatchText.transform, cx - 200f, Screen.height - 82f, 400f, 22f);
-            UIFactory.SetTopLeftCentered((RectTransform)bestText.transform, cx - 300f, cy - 10f, 600f, 26f);
 
             var birds = BirdPool.All;
             const float iconSize = 46f, spacing = 10f;
@@ -482,32 +572,67 @@ namespace FlyingChick
             const float dailyPanelW = 260f;
             float dailyPanelH = 26f + MaxDailyMissionLines * 24f;
             UIFactory.SetTopLeft((RectTransform)dailyPanel.transform, 16f, Screen.height - dailyPanelH - 16f, dailyPanelW, dailyPanelH);
-
-            var leaderboardPanel = leaderboardGroup.transform.Find("Panel");
-            if (leaderboardPanel != null)
-                UIFactory.SetTopLeftCentered((RectTransform)leaderboardPanel, cx - 220f, cy - 240f, 440f, 480f);
-
-            var authPanel = authFormGroup.transform.Find("Panel");
-            if (authPanel != null)
-                UIFactory.SetTopLeftCentered((RectTransform)authPanel, cx - 180f, cy - 162f, 360f, 324f);
         }
 
-        // Labels that are only ever set here (never touched again by
-        // per-frame refresh code) -- re-applied whenever the language
-        // changes so they don't stay stuck in the old language. Everything
-        // else (bird names, mission descriptions, leaderboard rows, ...)
-        // already gets its text reassigned every frame in RefreshContent()
-        // and friends, so it picks up a language change on its own.
+        private void ReflowSettingsPanel(float cx, float cy)
+        {
+            const float rowW = 340f, labelW = 90f;
+            float sliderW = rowW - labelW - 10f;
+            float x = cx - rowW * 0.5f;
+
+            float y = cy - 160f;
+            UIFactory.SetTopLeft((RectTransform)musicLabelText.transform, x, y, labelW, 26f);
+            UIFactory.SetTopLeft((RectTransform)musicSlider.transform, x + labelW + 10f, y + 3f, sliderW, 20f);
+
+            y += 50f;
+            UIFactory.SetTopLeft((RectTransform)sfxLabelText.transform, x, y, labelW, 26f);
+            UIFactory.SetTopLeft((RectTransform)sfxSlider.transform, x + labelW + 10f, y + 3f, sliderW, 20f);
+
+            const float btnW = 260f, btnH = 48f, gap = 14f;
+            y += 66f;
+            UIFactory.SetTopLeftCentered((RectTransform)languageToggleButton.transform, cx - btnW * 0.5f, y, btnW, btnH);
+            y += btnH + gap;
+            UIFactory.SetTopLeftCentered((RectTransform)authStatusButton.transform, cx - btnW * 0.5f, y, btnW, btnH);
+            y += btnH + gap;
+            UIFactory.SetTopLeftCentered((RectTransform)settingsBackButton.transform, cx - btnW * 0.5f, y, btnW, btnH);
+        }
+
+        private void ReflowHowToPlayPanel(float cx, float cy)
+        {
+            UIFactory.SetTopLeftCentered((RectTransform)howToPlayTitleText.transform, cx - 300f, cy - 220f, 600f, 50f);
+            UIFactory.SetTopLeft((RectTransform)howToPlayBodyText.transform, cx - 320f, cy - 150f, 640f, 320f);
+
+            const float btnW = 200f, btnH = 46f;
+            UIFactory.SetTopLeftCentered((RectTransform)howToPlayBackButton.transform, cx - btnW * 0.5f, cy + 200f, btnW, btnH);
+        }
+
+        // Build*()에서 한 번만 설정되고 그 뒤로 안 건드리는 라벨들 — 언어가
+        // 바뀌면 여기서 한꺼번에 다시 씀. 매 프레임 갱신되는 값(코인/점수/
+        // 미션 진행률 등)은 RefreshContent() 쪽에서 이미 매 프레임 다시
+        // 쓰이므로 언어 전환에 저절로 반응함.
         private void RefreshStaticLabels()
         {
-            sub1Text.text = Localization.Get("start.subtitle1");
-            sub2Text.text = Localization.Get("start.subtitle2");
-            leaderboardToggleText.text = Localization.Get("start.leaderboardButton");
+            playButtonText.text = Localization.Get("menu.play");
+            settingsButtonText.text = Localization.Get("menu.settings");
+            howToPlayButtonText.text = Localization.Get("menu.howToPlay");
+            leaderboardMenuButtonText.text = Localization.Get("start.leaderboardButton");
+
+            hintText.text = Localization.Get("start.subtitle2");
+            playBackButtonText.text = Localization.Get("menu.back");
             dailyHeaderText.text = Localization.Get("start.dailyMissionsHeader");
+            rerollButtonText.text = Localization.Get("start.nicknameReroll");
+
+            musicLabelText.text = Localization.Get("settings.music");
+            sfxLabelText.text = Localization.Get("settings.sfx");
+            languageToggleText.text = Localization.Current == Language.Korean ? "English" : "한국어";
+            settingsBackButtonText.text = Localization.Get("menu.back");
+
+            howToPlayTitleText.text = Localization.Get("menu.howToPlay");
+            howToPlayBodyText.text = Localization.Get("howtoplay.body");
+            howToPlayBackButtonText.text = Localization.Get("menu.back");
+
             leaderboardHeaderText.text = Localization.Get("leaderboard.header");
             leaderboardCloseText.text = Localization.Get("leaderboard.close");
-            rerollButtonText.text = Localization.Get("start.nicknameReroll");
-            languageToggleText.text = Localization.Current == Language.Korean ? "English" : "한국어";
 
             authLoginIdLabelText.text = Localization.Get("auth.loginIdLabel");
             authPasswordLabelText.text = Localization.Get("auth.passwordLabel");
@@ -528,26 +653,27 @@ namespace FlyingChick
                 bestText.gameObject.SetActive(false);
             }
 
-            if (wallet != null)
+            switch (currentPanel)
             {
-                coinsText.gameObject.SetActive(true);
-                coinsText.text = $"Coins: {wallet.Coins:N0}";
-            }
+                case Panel.Play:
+                    if (wallet != null)
+                    {
+                        coinsText.gameObject.SetActive(true);
+                        coinsText.text = $"Coins: {wallet.Coins:N0}";
+                    }
+                    RefreshBirdRow();
+                    RefreshDailyMissions();
+                    break;
 
-            authStatusButtonText.text = (auth != null && auth.IsLoggedIn)
-                ? $"{auth.ServerNickname} · {Localization.Get("auth.logoutButton")}"
-                : Localization.Get("auth.loginButton");
+                case Panel.Settings:
+                    authStatusButtonText.text = (auth != null && auth.IsLoggedIn)
+                        ? $"{auth.ServerNickname} · {Localization.Get("auth.logoutButton")}"
+                        : Localization.Get("auth.loginButton");
+                    break;
 
-            showLeaderboard = leaderboardGroup.activeSelf;
-
-            if (!showLeaderboard)
-            {
-                RefreshBirdRow();
-                RefreshDailyMissions();
-            }
-            else
-            {
-                RefreshLeaderboard();
+                case Panel.Leaderboard:
+                    RefreshLeaderboard();
+                    break;
             }
         }
 

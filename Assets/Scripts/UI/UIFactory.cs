@@ -164,6 +164,56 @@ namespace FlyingChick
             return inputField;
         }
 
+        // 볼륨 슬라이더용 최소 구성 UGUI Slider. 배경 + Fill Area(Fill) +
+        // Handle Slide Area(Handle) 구조는 Editor의 "Create > UI > Slider"가
+        // 만드는 것과 동일한 형태 — Slider 컴포넌트가 value에 따라 fillRect의
+        // anchorMax.x와 handleRect의 위치를 알아서 갱신해 줌. 0~1 범위 고정
+        // (볼륨 용도라 그 외 범위 필요 없음).
+        public static Slider CreateSlider(Transform parent, string name, float value)
+        {
+            var rt = CreateChild(parent, name);
+            var bg = rt.gameObject.AddComponent<Image>();
+            bg.sprite = WhiteSprite;
+            bg.color = new Color(1f, 1f, 1f, 0.25f);
+
+            var fillAreaRt = CreateChild(rt, "FillArea");
+            fillAreaRt.anchorMin = new Vector2(0f, 0f);
+            fillAreaRt.anchorMax = new Vector2(1f, 1f);
+            fillAreaRt.offsetMin = new Vector2(5f, 0f);
+            fillAreaRt.offsetMax = new Vector2(-5f, 0f);
+
+            var fillRt = CreateChild(fillAreaRt, "Fill");
+            var fillImg = fillRt.gameObject.AddComponent<Image>();
+            fillImg.sprite = WhiteSprite;
+            fillImg.color = new Color(1f, 0.7f, 0.3f, 1f);
+            fillRt.anchorMin = new Vector2(0f, 0f);
+            fillRt.anchorMax = new Vector2(0f, 1f);
+            fillRt.sizeDelta = new Vector2(10f, 0f);
+
+            var handleAreaRt = CreateChild(rt, "HandleSlideArea");
+            handleAreaRt.anchorMin = new Vector2(0f, 0f);
+            handleAreaRt.anchorMax = new Vector2(1f, 1f);
+            handleAreaRt.offsetMin = new Vector2(10f, 0f);
+            handleAreaRt.offsetMax = new Vector2(-10f, 0f);
+
+            var handleRt = CreateChild(handleAreaRt, "Handle");
+            var handleImg = handleRt.gameObject.AddComponent<Image>();
+            handleImg.sprite = WhiteSprite;
+            handleImg.color = Color.white;
+            handleRt.sizeDelta = new Vector2(18f, 18f);
+
+            var slider = rt.gameObject.AddComponent<Slider>();
+            slider.targetGraphic = handleImg;
+            slider.fillRect = fillRt;
+            slider.handleRect = handleRt;
+            slider.direction = Slider.Direction.LeftToRight;
+            slider.minValue = 0f;
+            slider.maxValue = 1f;
+            slider.value = value;
+
+            return slider;
+        }
+
         // A fully transparent, full-screen button used as a "tap anywhere to
         // start" catcher (see StartScreen). Must be created BEFORE any real
         // buttons under the same parent -- later siblings render on top and
