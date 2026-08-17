@@ -63,6 +63,7 @@ namespace FlyingChick
 
         private GameObject root;
 
+        private RectTransform scorePanelRect;
         private TextMeshProUGUI scoreText;
         private TextMeshProUGUI midText;
         private RectTransform midRect;
@@ -86,6 +87,7 @@ namespace FlyingChick
         private readonly TextMeshProUGUI[] toastPool = new TextMeshProUGUI[ToastPoolSize];
         private readonly TextMeshProUGUI[] pickupToastPool = new TextMeshProUGUI[PickupToastPoolSize];
 
+        private RectTransform debugPanelRect;
         private TextMeshProUGUI dbgStateText;
         private TextMeshProUGUI dbgHeightText;
 
@@ -155,8 +157,12 @@ namespace FlyingChick
 
             var brown = new Color(0.42f, 0.29f, 0.12f);
 
-            scoreText = UIFactory.CreateText(t, "Score", 34, brown, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            UIFactory.SetTopLeft((RectTransform)scoreText.transform, 20, 14, 300, 44);
+            var scorePanel = UIFactory.CreatePanel(t, "ScorePanel", new Color(0f, 0f, 0f, 0.4f));
+            scorePanelRect = (RectTransform)scorePanel.transform;
+            UIFactory.SetTopLeft(scorePanelRect, 12, 8, 260, 56);
+
+            scoreText = UIFactory.CreateText(t, "Score", 38, new Color(1f, 0.95f, 0.75f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            UIFactory.SetTopLeft((RectTransform)scoreText.transform, 24, 14, 300, 48);
 
             midText = UIFactory.CreateText(t, "IslandMult", 18, brown);
             midRect = (RectTransform)midText.transform;
@@ -254,8 +260,12 @@ namespace FlyingChick
 
         private void BuildDebugText(Transform parent)
         {
-            dbgStateText = UIFactory.CreateText(parent, "DbgState", 14, new Color(1f, 1f, 1f, 0.75f));
-            dbgHeightText = UIFactory.CreateText(parent, "DbgHeight", 14, new Color(1f, 1f, 1f, 0.75f));
+            var panel = UIFactory.CreatePanel(parent, "DebugPanel", new Color(0f, 0f, 0f, 0.45f));
+            debugPanelRect = (RectTransform)panel.transform;
+
+            var brightWhite = new Color(1f, 0.95f, 0.75f);
+            dbgStateText = UIFactory.CreateText(parent, "DbgState", 16, brightWhite, TextAlignmentOptions.TopRight, FontStyles.Bold);
+            dbgHeightText = UIFactory.CreateText(parent, "DbgHeight", 16, brightWhite, TextAlignmentOptions.TopRight, FontStyles.Bold);
         }
 
         private void Update()
@@ -300,15 +310,18 @@ namespace FlyingChick
             UpdateToasts();
             UpdatePickupToasts();
 
+            bool showHeight = cam != null;
+            UIFactory.SetTopLeft(debugPanelRect, Screen.width - 260, Screen.height - (showHeight ? 66 : 44), 248, showHeight ? 60 : 38);
+
             string state = bird.OnGround ? "Grounded" : bird.Airborne ? "Airborne" : "Falling";
             dbgStateText.text = $"{state}  spd {bird.Speed:0}{(bird.IsDiving ? "  DIVE" : "")}";
-            UIFactory.SetTopLeft((RectTransform)dbgStateText.transform, Screen.width - 220, Screen.height - 50, 220, 20);
+            UIFactory.SetTopLeft((RectTransform)dbgStateText.transform, Screen.width - 250, Screen.height - 58, 230, 24);
 
-            if (cam != null)
+            if (showHeight)
             {
                 dbgHeightText.gameObject.SetActive(true);
                 dbgHeightText.text = $"height {bird.HeightAboveGround:0}  zoom {cam.orthographicSize:0}";
-                UIFactory.SetTopLeft((RectTransform)dbgHeightText.transform, Screen.width - 220, Screen.height - 30, 220, 20);
+                UIFactory.SetTopLeft((RectTransform)dbgHeightText.transform, Screen.width - 250, Screen.height - 34, 230, 24);
             }
             else
             {
@@ -359,7 +372,7 @@ namespace FlyingChick
             float panelH = 22f + missions.Length * 20f;
             UIFactory.SetTopLeft(nestPanelRect, 20f, 66f, panelW, panelH);
 
-            nestHeaderText.text = $"Nest 목표 (+{nest.Bonus} 배수)";
+            nestHeaderText.text = string.Format(Localization.Get("hud.nestHeader"), nest.Bonus);
 
             for (int i = 0; i < NestLinePoolSize; i++)
             {
@@ -370,7 +383,7 @@ namespace FlyingChick
                 float progress = nest.GetProgress(mission);
                 bool done = progress >= mission.Target;
                 nestLines[i].color = done ? new Color(0.6f, 1f, 0.6f) : new Color(1f, 1f, 1f, 0.85f);
-                string mark = done ? "✓" : $"{Mathf.Min(progress, mission.Target):0}/{mission.Target}";
+                string mark = done ? "O" : $"{Mathf.Min(progress, mission.Target):0}/{mission.Target}";
                 nestLines[i].text = $"{mission.Description} ({mark})";
             }
         }

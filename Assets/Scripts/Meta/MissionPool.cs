@@ -26,13 +26,19 @@ namespace FlyingChick
     {
         public MissionType Type;
         public int Target;
-        public string Description;
 
-        public MissionDefinition(MissionType type, int target, string description)
+        // Localized at read time (Localization.Current can change any time
+        // via the start screen's language toggle) rather than baked in as a
+        // fixed string -- the format template is keyed by Type alone since
+        // Target already parameterizes it (see Localization's mission.*
+        // entries), so this works for any target value without needing one
+        // table entry per (Type, Target) combination.
+        public string Description => string.Format(Localization.Get($"mission.{Type}"), Target);
+
+        public MissionDefinition(MissionType type, int target)
         {
             Type = type;
             Target = target;
-            Description = description;
         }
     }
 
@@ -40,20 +46,20 @@ namespace FlyingChick
     {
         public static readonly MissionDefinition[] Daily =
         {
-            new MissionDefinition(MissionType.FeverTriggerCount, 3, "Fever 3회 발동"),
-            new MissionDefinition(MissionType.ReachIsland, 6, "6번째 섬 도달"),
-            new MissionDefinition(MissionType.CollectCoins, 50, "코인 50개 획득"),
-            new MissionDefinition(MissionType.GreatSlideCount, 20, "Great Slide 20회 성공"),
-            new MissionDefinition(MissionType.CloudTouchCount, 5, "구름 5개 터치"),
+            new MissionDefinition(MissionType.FeverTriggerCount, 3),
+            new MissionDefinition(MissionType.ReachIsland, 6),
+            new MissionDefinition(MissionType.CollectCoins, 50),
+            new MissionDefinition(MissionType.GreatSlideCount, 20),
+            new MissionDefinition(MissionType.CloudTouchCount, 5),
         };
 
         public static readonly MissionDefinition[] Nest =
         {
-            new MissionDefinition(MissionType.CloudTouchCount, 3, "구름 3개 터치"),
-            new MissionDefinition(MissionType.FeverDuration, 5, "Fever 5초 이상 유지"),
-            new MissionDefinition(MissionType.ScoreReached, 5000, "5000점 획득"),
-            new MissionDefinition(MissionType.GreatSlideCount, 10, "Great Slide 10회 성공"),
-            new MissionDefinition(MissionType.ReachIsland, 3, "3번째 섬 도달"),
+            new MissionDefinition(MissionType.CloudTouchCount, 3),
+            new MissionDefinition(MissionType.FeverDuration, 5),
+            new MissionDefinition(MissionType.ScoreReached, 5000),
+            new MissionDefinition(MissionType.GreatSlideCount, 10),
+            new MissionDefinition(MissionType.ReachIsland, 3),
         };
     }
 }

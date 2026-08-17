@@ -41,7 +41,9 @@ namespace FlyingChick
         private TextMeshProUGUI nestHeaderText;
         private readonly TextMeshProUGUI[] nestLines = new TextMeshProUGUI[MaxNestLines];
         private Button restartButton;
+        private TextMeshProUGUI restartButtonText;
         private Button homeButton;
+        private TextMeshProUGUI homeButtonText;
 
         public void Bind(ScoreManager scoreRef, SlideJudge slideJudgeRef, CloudSpawner cloudSpawnerRef, FeverSystem feverRef, GameManager gameManagerRef, CoinWallet walletRef, NestMultiplier nestRef, AudioManager audioRef)
         {
@@ -57,12 +59,15 @@ namespace FlyingChick
             gameManager.OnRunStart += HandleRunStart;
 
             BuildUI();
+
+            Localization.OnLanguageChanged += RefreshStaticLabels;
         }
 
         private void OnDestroy()
         {
             if (gameManager != null)
                 gameManager.OnRunStart -= HandleRunStart;
+            Localization.OnLanguageChanged -= RefreshStaticLabels;
         }
 
         private void HandleRunStart() => submittedThisRun = false;
@@ -77,7 +82,6 @@ namespace FlyingChick
             UIFactory.StretchFull((RectTransform)overlay.transform);
 
             titleText = UIFactory.CreateText(t, "Title", 36, new Color(0.32f, 0.2f, 0.36f), TextAlignmentOptions.Center, FontStyles.Bold);
-            titleText.text = "해가 졌어요";
 
             bestBadgeText = UIFactory.CreateText(t, "BestBadge", 16, new Color(1f, 0.55f, 0.15f), TextAlignmentOptions.Center, FontStyles.Bold);
             bestBadgeText.text = "NEW HIGHSCORE!";
@@ -91,19 +95,34 @@ namespace FlyingChick
             for (int i = 0; i < MaxNestLines; i++)
                 nestLines[i] = UIFactory.CreateText(t, $"NestLine{i}", 15, Color.white, TextAlignmentOptions.Center);
 
-            restartButton = UIFactory.CreateButton(t, "RestartButton", "다시하기", 20, new Color(0.3f, 0.2f, 0.1f), out _);
+            restartButton = UIFactory.CreateButton(t, "RestartButton", "", 20, new Color(0.3f, 0.2f, 0.1f), out restartButtonText);
             restartButton.onClick.AddListener(() =>
             {
                 audio?.PlayClick();
                 gameManager.BeginRun();
             });
 
-            homeButton = UIFactory.CreateButton(t, "HomeButton", "홈", 20, new Color(0.3f, 0.2f, 0.1f), out _);
+            homeButton = UIFactory.CreateButton(t, "HomeButton", "", 20, new Color(0.3f, 0.2f, 0.1f), out homeButtonText);
             homeButton.onClick.AddListener(() =>
             {
                 audio?.PlayClick();
                 gameManager.ReturnToStart();
             });
+
+            RefreshStaticLabels();
+        }
+
+        // Only titleText/restartButtonText/homeButtonText are set once here
+        // and never touched again -- everything else in this screen's
+        // Layout() already reassigns .text every frame it's visible, so it
+        // picks up a language change on its own (see the M7 comment on
+        // Layout() -- this screen isn't perf-sensitive enough to bother
+        // gating that).
+        private void RefreshStaticLabels()
+        {
+            titleText.text = Localization.Get("dayover.title");
+            restartButtonText.text = Localization.Get("dayover.restart");
+            homeButtonText.text = Localization.Get("dayover.home");
         }
 
         private void Update()
@@ -179,7 +198,7 @@ namespace FlyingChick
                 var mission = missions[i];
                 bool passed = nest.GetProgress(mission) >= mission.Target;
                 nestLines[i].color = passed ? new Color(0.2f, 0.55f, 0.2f) : new Color(0.55f, 0.2f, 0.2f);
-                string mark = passed ? "✓" : "✗";
+                string mark = passed ? "O" : "X";
                 nestLines[i].text = $"{mark} {mission.Description}";
                 UIFactory.SetTopLeftCentered((RectTransform)nestLines[i].transform, cx - 300f, y, 600f, 22f);
                 y += 22f;

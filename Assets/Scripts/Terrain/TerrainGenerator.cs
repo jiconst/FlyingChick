@@ -78,6 +78,17 @@ namespace FlyingChick
             float rightEdge = ScreenSpace.RightEdgeCanvasX(viewHeight, cam.aspect, cam.orthographicSize);
             int steps = Mathf.Max(2, Mathf.CeilToInt((rightEdge - leftEdge) / sampleStep) + 1);
 
+            // Same zoom-awareness applies vertically: the bottom fill edge
+            // used to sit at a fixed -viewHeight/2 - fillDepth, tuned for
+            // the baseline (unzoomed) camera. Zooming out (CameraZoom) grows
+            // the visible vertical span beyond that, so the fixed edge could
+            // end up above the bottom of the screen -- a gap of raw
+            // background showing below the hill fill that appeared/vanished
+            // as the zoom level changed. Basing it on the CURRENT
+            // orthographicSize instead keeps it below the visible area at
+            // any zoom.
+            float bottomY = -cam.orthographicSize - fillDepth;
+
             vertexBuffer.Clear();
             colorBuffer.Clear();
             triangleBuffer.Clear();
@@ -95,7 +106,7 @@ namespace FlyingChick
                 float localY = ScreenSpace.ToWorldY(canvasY, viewHeight);
 
                 vertexBuffer.Add(new Vector3(localX, localY, 0f));
-                vertexBuffer.Add(new Vector3(localX, -viewHeight * 0.5f - fillDepth, 0f));
+                vertexBuffer.Add(new Vector3(localX, bottomY, 0f));
 
                 float t = Mathf.Clamp01((canvasY - bandTop) / bandRange);
                 colorBuffer.Add(SampleBand(t, top, band0, band1, band2));

@@ -316,9 +316,13 @@ M3), **카메라 줌**(`FX/CameraZoom.cs`), **다이브 먼지/Fever 별 트레�
 (`FX/BirdTrailParticles.cs`), **하늘 그라데이션/태양·달/별/섬별 10색 팔레트**
 (`FX/SkyRenderer.cs`, `FX/SkyObjects.cs`, `Terrain/IslandPalette.cs`), **사운드**
 (`Audio/`, 아래 상세), **성능(정적 코드 리뷰 기반 GC 할당 제거, 아래 상세)**,
-**OnGUI → UGUI/TextMeshPro 교체(아래 상세) — 플레이 확인 필요, 특히 한글 렌더링부터** 완료.
-남은 것:
-- (스킵) 뒷배경 패럴랙스 언덕, 언덕 위 잔디 tuft — 우선순위 낮아서 생략, 필요하면 나중에
+**OnGUI → UGUI/TextMeshPro 교체(아래 상세)**, **뒷배경 패럴랙스 언덕 + 잔디 tuft(아래 상세)
+— 전부 플레이 확인 필요** 완료. 남은 것:
+- (스킵, 계속 보류) 태양 주변 glow — Unity `SpriteRenderer`로는 HTML의 `ctx.shadowBlur`
+  재현이 번거로워 생략, 필요하면 나중에 Bloom 포스트프로세싱으로
+- (스킵, 계속 보류) 언덕 크레스트 위 밝은 rim 하이라이트 라인 — `drawHills()`에 있지만 잔디
+  tuft만큼 눈에 띄는 효과가 아니라서 이번엔 생략, 필요하면 `GrassTuftGenerator`와 같은
+  패턴으로 추가 가능
 
 ### OnGUI → UGUI/TextMeshPro 교체
 사용자에게 세 가지 선택지(UGUI+TMP / UI Toolkit / 지금은 보류)를 물어봤고 **UGUI(Canvas +
@@ -400,6 +404,18 @@ Canvas 계층을 코드로 만들어 두고(에디터 수동 설정 없음, 기�
   (`UIFontProvider.cs` 상단 주석에도 기록). 이 임포트가 추가하는 Liberation Sans SDF는
   라틴 전용이라 한글 렌더링에는 어차피 안 쓰임 — 우리 코드는 여전히 항상
   `UIFontProvider.Get()`으로 직접 만든 한글 폰트를 명시적으로 꽂아줌.
+- **✓/✗ 딩뱃 기호가 두부(□)로 깨짐 → "O"/"X" 문자로 교체**: 콘솔에 "character ✗ was
+  not found in the [Runtime Korean SDF] font asset" 경고 + `TMP_Text`가 자동으로 □(U+25A1)
+  대체 글리프로 바꿔치기하는 문제. 원인: `✓`(U+2713)/`✗`(U+2717)는 둘 다 유니코드 Dingbats
+  블록인데, `UIFontProvider`가 쓰는 한글 시스템 폰트(AppleSDGothicNeo/AppleGothic)는 한글+
+  라틴 위주라 이 블록을 포함 안 함 — 우리가 만든 폰트 자체의 문제가 아니라 그 폰트가 애초에
+  커버하지 않는 문자였음. **`✗`만 경고가 떴었지만 `✓`도 같은 블록이라 잠재적으로 똑같이
+  깨질 수 있어서(아직 통과 미션을 안 봐서 안 걸렸을 뿐일 수 있음) 코드베이스 전체에서 두
+  기호를 다 찾아서 함께 고침** — `HUD.cs`(Nest 패널), `StartScreen.cs`(데일리 미션 패널),
+  `DayOverScreen.cs`(Nest 목표 결과)의 `✓`/`✗`를 전부 `"O"`/`"X"`로 교체. 한국어 "OX 퀴즈"
+  표기 관례와도 맞아서 자연스러움. **교훈: 런타임 생성 폰트를 쓸 때는 일반 문자(한글/영문/
+  숫자/기본 문장부호) 밖의 특수 기호·이모지·딩뱃은 그 폰트가 실제로 커버하는지 별도로
+  확인해야 함** — 코드에 새 기호 문자를 추가할 때는 이 점을 염두에 둘 것.
 - **`Packages/manifest.json` 변경 없음**: Unity 6(`com.unity.ugui` 2.5.0)부터 TextMeshPro가
   이 패키지에 내장돼서 `com.unity.textmeshpro`를 별도로 추가할 필요가 없음
   (`packages-lock.json`에서 확인 — `com.unity.ugui`만 있고 별도 textmeshpro 항목 없음).
@@ -407,6 +423,13 @@ Canvas 계층을 코드로 만들어 두고(에디터 수동 설정 없음, 기�
   GameObject에 컴포넌트로 붙지만, 실제 화면은 각자 `UIFactory.CreateCanvas(...)`로 만든
   별도의 최상위 Canvas GameObject**(정렬 순서: HUD=0, StartScreen=10, DayOverScreen=20 —
   상태가 서로 배타적이라 실제로 겹칠 일은 거의 없지만 전환 중 깜빡임 방지용 안전장치)
+- **플레이 확인 후 가독성 피드백으로 수정**: 좌상단 점수, 우하단 디버그 텍스트 두 곳은
+  배경 패널 없이 텍스트만 떠 있어서 하늘/지형 색에 따라 묻히는 문제가 있었음(HUD 초기
+  구현 때부터 있던, 이전에도 day-clock 진행바에서 한 번 겪었던 것과 같은 종류의 문제 —
+  "이전 세션 기록" 6번 항목 참고). **고침**: 이미 스트릭/네스트 패널에서 쓰던 반투명 검은
+  배경(`ScorePanel`/`DebugPanel`, 알파 0.4~0.45) + 밝은 크림색 굵은 글씨 패턴을 그대로
+  적용, 폰트 크기도 키움(점수 34→38, 디버그 14→16). 디버그 텍스트는 우측 정렬로 바꿔서
+  패널 오른쪽 여백에 자연스럽게 붙게 함.
 
 ### 성능 (정적 코드 리뷰 기반 GC 할당 제거)
 - **주의**: 이 환경에서는 Unity Profiler를 직접 붙여서 실측할 방법이 없음 — 아래는 코드를
@@ -480,9 +503,34 @@ Canvas 계층을 코드로 만들어 두고(에디터 수동 설정 없음, 기�
   무관하게 화면에 고정된 위치**에 그림 — 즉 이 좌표들은 `gm.ScrollX`를 더하지 않고
   `ScreenSpace.ToWorldX/Y`에 바로 넣음 (다른 모든 오브젝트는 `gm.ScrollX + canvasX`를
   쓰는 것과 대조적임, 헷갈리지 말 것)
-- **M7에서 안 한 것**: 뒷배경 패럴랙스 언덕 1겹, 언덕 위 잔디 tuft, 태양 주변 glow(HTML은
-  `ctx.shadowBlur`로 은은한 빛번짐을 넣지만 Unity SpriteRenderer로는 그대로 재현이 번거로워
-  생략 — 필요하면 Bloom 포스트프로세싱으로 나중에 처리하는 게 나음)
+- **M7에서 안 한 것**: 태양 주변 glow(HTML은 `ctx.shadowBlur`로 은은한 빛번짐을 넣지만 Unity
+  SpriteRenderer로는 그대로 재현이 번거로워 생략 — 필요하면 Bloom 포스트프로세싱으로 나중에
+  처리하는 게 나음), 언덕 크레스트 rim 하이라이트 라인
+
+### 배경 패럴랙스 언덕 / 잔디 tuft (`Terrain/BackgroundHillGenerator.cs`, `Terrain/GrassTuftGenerator.cs`)
+M7에서 우선순위 낮다고 스킵했던 두 항목 — `flying-chick.html`의 `drawHills()`에서 그대로 포팅.
+
+- **`BackgroundHillGenerator.cs`**: `drawHills()`의 "background echo hills (parallax,
+  lighter)" 부분. **같은** `GameManager.Ground`(`GroundSampler`)를 다시 샘플링하되,
+  월드 X를 `ScrollX * 0.55`로 늦게 스크롤시키고(`parallaxFactor`) Y를 `+70`(`verticalOffset`)
+  내려서 진짜 전경 언덕(`TerrainGenerator`) 뒤에서 더 느리게 흘러가는 것처럼 보이게 함 —
+  **화면상 정점 위치(`canvasX`)는 그대로 두고, `GroundY()`를 샘플링할 때만 다른(느린) 월드
+  X를 쓰는 게 패럴랙스 트릭의 핵심** (레퍼런스 `wx = scrollX*0.55 + x; lineTo(x, groundY(wx))`
+  와 동일 — `x`는 화면 좌표, `wx`만 느리게 감). 색은 그라데이션 없이 단색
+  (`pal.HillTop`을 밤에 `#20204a`로 lerp) + 반투명(`alpha=0.5`). `TerrainGenerator`와
+  똑같은 재사용 메시/버퍼 패턴, 줌 대응 좌우/하단 경계 계산까지 동일하게 적용(줌아웃 시
+  빈 공간 생기는 버그를 애초에 피함). `sortingOrder=-5`로 하늘(`-15~-20`)보다 앞, 메인
+  지형(기본값 0)보다 뒤에 그려지도록 배치.
+- **`GrassTuftGenerator.cs`**: `drawHills()`의 "grass tufts along crest" 부분. 26 캔버스
+  유닛 간격으로, 경사가 완만한 곳(`|slope| < 0.5`)에서만 짧은 대각선 잔디 하나씩 — 레퍼런스가
+  `ctx.lineWidth`로 그리는 선을, Unity에서는 얇은 사각형(쿼드, 삼각형 2개) 메시로 직접
+  만들어서 표현함(틴트 없는 단색 채움). 라인렌더러/오브젝트를 잔디마다 하나씩 만드는 대신
+  **재사용 메시 하나에 전부 합쳐서** 매 프레임 다시 채움 — `TerrainGenerator` M7 성능 패스
+  때와 같은 이유(매 프레임 GameObject/Instantiate 반복 금지 원칙). `sortingOrder=1`로 메인
+  지형 위에 그려짐. 색은 `pal.Grass`(`IslandPalette`에 이미 있던 필드, M7 초기에 팔레트
+  포팅할 때 미리 넣어둬서 이번에 바로 씀)를 밤에 `#2a2a4a`로 lerp.
+- 둘 다 `GameBootstrapper`에서 `DayCycle` 생성 직후 배선(`SetDayCycle`), `TerrainGenerator`
+  와 같은 `Camera.main`/`GameManager.Ground` 참조 패턴.
 
 ### 다이브 먼지 / Fever 별 트레일 (`FX/BirdTrailParticles.cs`)
 - HTML의 `spawnDust()`(다이빙 중 프레임당 50% 확률)/`spawnStar()`(Fever 중 프레임당 60%
@@ -500,11 +548,16 @@ Canvas 계층을 코드로 만들어 두고(에디터 수동 설정 없음, 기�
   밖으로 사라지면 안 된다"는 요청으로 방식을 바꿈** — 고정 퍼센트 상한 대신, 병아리의
   실제 월드 Y 위치가 항상 카메라 시야 안(`[-orthographicSize, +orthographicSize]`,
   카메라가 Y=0 고정이므로)에 들어오도록 **필요한 만큼** 줌아웃함
-  - `neededHalfHeight = max(baseOrthoSize, |birdY| + margin)`, 안전장치로
+  - `neededHalfHeight = max(baseOrthoSize, |birdY| * heightMultiplier + margin)`, 안전장치로
     `baseOrthoSize * 4`를 절대 상한으로 둠 (물리 버그로 비정상적으로 높이 튀는 경우 대비용,
     평소 게임플레이에서 걸릴 일은 없음)
   - 줌아웃/줌인 스무딩 시간을 다르게 줌 (`zoomOutSmoothTime=0.12`로 빠르게 따라잡고,
     `zoomInSmoothTime=0.35`로 천천히 복귀) — 급상승엔 즉각 반응하되 복귀는 부드럽게
+  - **튜닝**: "줌아웃이 좀 더 커야 할 것 같아" 피드백으로 `heightMultiplier`(신규, 기본
+    1.6)를 추가함 — 원래는 `|birdY| + margin`으로 병아리가 화면에 "딱 맞게만" 들어오는
+    수준이었는데, 이제 병아리 높이에 비례해서 여유를 더 두고 줌아웃하도록 배율을 곱함 (플랫
+    마진만으로는 높이 올라갈수록 상대적으로 여유가 줄어드는 효과라 배율 방식으로 바꿈).
+    더 커야/작아야 하면 이 값 하나로 조절.
 - **카메라는 여전히 `transform.position`을 절대 안 움직임** — `orthographicSize`만 바뀜
   (프로젝트 전체가 "카메라 고정 + 월드가 스크롤" 모델이라 위치는 M1부터 고정 원칙 유지)
 
@@ -529,6 +582,151 @@ Canvas 계층을 코드로 만들어 두고(에디터 수동 설정 없음, 기�
   캔버스좌표로 계산해줌 — 세 스크립트 전부 이걸로 교체
 - `BirdController`의 새 시작 X 위치(`width*0.28`) 계산은 **그대로 기준 폭 사용** — 이건
   줌과 무관하게 "화면의 28% 지점"이라는 고정 디자인값이라 안 바꿈
+- **세로 방향에도 같은 종류의 버그가 있었음(뒤늦게 발견, `heightMultiplier` 도입 후 눈에
+  띔)**: `TerrainGenerator`의 언덕 메시 하단 채움선이 `-viewHeight*0.5f - fillDepth`로
+  **기준 줌 기준 고정값**이었음 — 좌우 경계는 이미 줌에 맞춰 고쳤었는데 이 세로 하단선은
+  놓치고 있었음. 줌아웃해서 화면이 커지면 이 고정된 하단선이 실제 화면 하단보다 위에 위치할
+  수 있어서, 언덕 아래로 배경색이 드러났다가 줌인하면 다시 안 보이는 증상으로 나타남
+  ("줌아웃 시 언덕 하단 이미지가 화면 밖으로 나갔다가 들어오는 느낌" 피드백). **고침**:
+  `bottomY = -cam.orthographicSize - fillDepth`로, 매 프레임 **현재** 줌 레벨 기준으로
+  계산하도록 변경 — 좌우 경계와 동일한 패턴. **교훈: 줌이 가변적인 화면에서는 화면 경계에
+  닿는 모든 지오메트리(좌/우뿐 아니라 위/아래도)를 전부 현재 `orthographicSize` 기준으로
+  계산해야 함 — 하나라도 기준값(baseline)에 고정해두면 줌 레벨에 따라 드러나는 잠재
+  버그가 됨.**
+
+## 7단계 — 다국어(한/영) + 닉네임 — M1~M7 계획 이후 추가 (원래 최초 스펙에 있던 항목)
+
+원래 최초 요청 스펙에 "닉네임 생성, 랭킹, 다국어"가 있었지만 M1~M7 마일스톤 계획에는 포함되지
+않았던 항목 — M7까지 다 끝난 뒤에 마저 구현. 시작 전에 두 가지를 확인함: **다국어는 한/영
+2개국어 + 설정(시작 화면)에서 전환 가능**, **닉네임은 자동 생성 + 시작 화면에서 재생성/직접
+입력 가능**.
+
+### 다국어 (`Core/Localization.cs`)
+- **싱글톤 아님** — 이 프로젝트 컨벤션(GameManager/ScoreManager/SaveSystem만 싱글톤 허용)에
+  따라 정적 클래스로 구현. `Language` enum(Korean/English) + `Localization.Current`
+  (프로퍼티, `SaveSystem.Data.language`에 영구 저장) + `Localization.Get(key)` 조회 함수 +
+  `Localization.OnLanguageChanged` 이벤트로 구성
+- **범위를 의도적으로 좁힘**: HUD의 토스트/디버그 텍스트("GREAT SLIDE", "STREAK RESET",
+  "Island {0} · {1}x" 등)는 애초에 프로젝트 초반부터 영어로 쓰여 있었던 스타일적 선택이라
+  한/영 전환해도 똑같이 보임 — 번역 테이블에 넣을 이유가 없어서 그대로 문자열 리터럴로 둠.
+  **실제로 번역 테이블에 들어간 건 진짜 한글이었던 것들만**: 시작 화면 부제/버튼/패널 헤더,
+  Day Over 화면 타이틀/버튼, HUD의 Nest 헤더, 미션 설명(`MissionPool`), 새 이름/Perk 설명
+  (`BirdPool`) — CLAUDE.md보다 `Localization.cs`의 `Table` 딕셔너리 자체가 최신 소스
+- **미션/새 설명을 "저장된 문자열"에서 "읽을 때 계산하는 프로퍼티"로 바꿈**:
+  `MissionDefinition.Description`은 이제 `Type`만으로 `Localization.Get($"mission.{Type}")`
+  포맷 템플릿을 찾아서 `Target`을 채워 넣는 계산된 프로퍼티(`Type`+`Target` 하나당 번역
+  키 하나가 아니라 `Type`당 하나 — 어떤 `Target` 값이 와도 재사용됨). `BirdDefinition.Name`/
+  `PerkDescription`도 같은 방식(`Id`/`Perk` 기반). **두 struct 다 생성자에서 설명 문자열
+  파라미터가 사라짐** — `MissionPool`/`BirdPool`의 배열 초기화 코드도 그에 맞춰 짧아짐
+- **언어가 바뀌면 즉시 화면에 반영되는 방식**: HUD/StartScreen/DayOverScreen 대부분의
+  텍스트는 이미 매 프레임 다시 쓰이고 있어서(점수, 미션 진행률 등) 언어를 바꾸면 다음
+  프레임에 저절로 새 언어로 바뀜. `Build*()` 시점에 딱 한 번만 설정되고 그 뒤로 안 건드리는
+  라벨(부제, 버튼 텍스트, 헤더 등)만 별도로 `RefreshStaticLabels()`에 모아서, 빌드 시점 +
+  `Localization.OnLanguageChanged` 이벤트 양쪽에서 호출 — 각 화면 파일에 어떤 라벨이 여기
+  해당하는지 주석으로 남겨둠
+- 시작 화면 우상단에 언어 전환 버튼 추가(코인/기록 버튼 아래) — 버튼 라벨은 **지금 언어가
+  아니라 눌렀을 때 바뀔 언어**를 보여줌(한국어 모드에선 "English", 영어 모드에선 "한국어")
+
+### 닉네임 (`Meta/PlayerProfile.cs`, `Meta/NicknameGenerator.cs`)
+- `PlayerProfile`도 싱글톤 아님(같은 이유) — `SaveSystem.Data.nickname`에 저장, 최초 실행
+  시 `NicknameGenerator.Generate()`로 "형용사+병아리+숫자"(예: "용감한 병아리123" /
+  "BraveChick123") 자동 생성. 단어 목록은 **생성되는 그 순간의** `Localization.Current`
+  기준(한국어 모드면 한글 형용사, 영어 모드면 영어 형용사) — 이후 언어를 바꿔도 이미 정해진
+  닉네임 자체는 안 바뀜(정체성이지 UI 텍스트가 아니므로), 재생성/직접입력으로만 바뀜
+- 시작 화면 좌상단에 `TMP_InputField`(신규 `UIFactory.CreateInputField` 헬퍼로 런타임
+  조립 — Editor의 "Create > UI > Input Field - TextMeshPro"와 같은 구조를 코드로 직접 만듦)
+  + "재생성" 버튼. 입력 필드는 포커스를 잃을 때(`onEndEdit`) `PlayerProfile.SetNickname()`
+  호출 — 빈 문자열은 무시, 16자로 잘라서 저장(레이아웃 안 깨지게)
+- **스페이스바 버그 주의해서 막음**: `StartScreen.Update()`가 스페이스바를 폴링해서
+  런 시작을 트리거하는데, 닉네임에 공백이 들어간 걸 입력하려고 스페이스바를 누르면 동시에
+  게임이 시작돼버릴 뻔함 — `nicknameField.isFocused`일 땐 스페이스바 폴링을 건너뛰도록 가드
+- **스코프에서 뺀 것**: 닉네임을 로컬 리더보드 각 줄에 붙이지 않음 — 지금 리더보드는 같은
+  플레이어 한 명의 기록만 쌓이는 로컬 Top 10이라, 모든 줄에 같은 이름을 반복해서 붙여봤자
+  정보가 안 늘어남. 나중에 공유/온라인 랭킹으로 확장되면 그때 다시 볼 것(`PlayerProfile.cs`
+  주석에도 기록)
+
+## 8단계 — 온라인 계정 / 점수 랭킹 (`FlyingChick-Server`, Phase A+B 완료 / Phase C 대기)
+
+사용자가 회원가입/로그인(아이디+비밀번호), 서버 발급 고유 닉네임, 점수 랭킹 집계 화면을
+요청 — 별도 Python FastAPI + MySQL 백엔드를 Docker로 만들고, Unity 클라이언트에 연동. 계획
+문서: `/Users/jiconst/.claude/plans/glowing-floating-owl.md` (Phase A/B/C로 분할해서 승인
+받음). **핵심 원칙: 로그인은 항상 선택 사항 — 서버가 죽어 있거나 아예 없어도 게임은 100%
+오프라인으로 그대로 동작해야 함.** 이 원칙이 깨지면 안 되는 게 이 8단계 전체에서 가장 중요한
+불변 조건.
+
+### 백엔드 (`~/src/FlyingChick-Server`, Unity 프로젝트와 완전히 별개의 Python 저장소, 자체 git repo)
+- FastAPI(최신) + Pydantic v2 + SQLAlchemy 2.0(동기, PyMySQL) + Alembic 마이그레이션 +
+  MySQL 8.4(도커, `:latest` 아님 — 최근 `latest` 태그가 불안정한 "innovation" 릴리스
+  라인을 가리켜서 명시적으로 `8.4` LTS 고정) + bcrypt(패스워드 해시, 72바이트 제한 직접
+  처리) + PyJWT(`>=2.12.0`, CVE 대응) 조합. 세부 근거는 계획 문서의 "Plan-review" 절 참고
+  (async SQLAlchemy/asyncmy가 더 최신이지만, 이 규모에서는 동기+PyMySQL로 충분하다고 판단—
+  `README.md`에 향후 업그레이드 경로로 메모해둠)
+- 엔드포인트: `/auth/signup`(닉네임 자동 발급), `/auth/login`, `/auth/me`,
+  `/auth/nickname/reroll`, `/auth/nickname`(PUT, 직접 지정), `/scores`(POST, 인증 필요),
+  `/rankings?period=daily|weekly|alltime`(공개), `/rankings/me`(인증 필요) — 표/스키마는
+  `README.md`에 정리돼 있음
+- **랭킹은 스케줄 집계가 아니라 쿼리 시점에 윈도우 함수(`ROW_NUMBER() OVER (PARTITION BY
+  user_id ORDER BY score DESC, created_at ASC)`)로 유저당 최고 점수 1개만 뽑아서 계산** —
+  이 규모에서는 별도 집계 테이블/배치잡이 오히려 과함
+- **Docker 빌드/실행 중 실제로 발견해서 고친 버그**: MySQL 컨테이너가 최초 부팅 시 내부적으로
+  한 번 재시작하는데, 그 사이 healthcheck(`mysqladmin ping`)는 이미 "healthy"라고 보고해서
+  `alembic upgrade head`가 "Connection refused"로 죽는 레이스 컨디션이 있었음(`depends_on:
+  condition: service_healthy`로도 못 막음). **고침**: `Dockerfile`의 CMD를 `until alembic
+  upgrade head; do sleep 2; done && uvicorn ...` 재시도 루프로 변경 — 볼륨까지 지우고
+  클린 재빌드해서 재발 확인함(재시도 로그만 찍히고 컨테이너 재시작 없이 한 번에 정상
+  기동되는 것 확인)
+- **curl로 전체 플로우 직접 검증 완료**: 회원가입/중복가입(409)/로그인/틀린 비밀번호(401)/
+  약한 비밀번호(422)/점수 제출/랭킹 3종(daily·weekly·alltime, 유저별 최고점만 반영되고
+  순위 역전도 정확)/내 순위/닉네임 재생성·직접변경/닉네임 중복(409)/미인증 접근(401) 전부
+  기대한 대로 동작
+- Phase A 완료 시점에 `~/src/FlyingChick-Server`를 git init + 최초 커밋함(별도 repo,
+  Unity 프로젝트 git과 무관)
+
+### Unity 네트워킹 레이어 (`Assets/Scripts/Network/`, 신규 폴더)
+- **`ApiClient.cs`**: `UnityWebRequest` 래퍼. 이 프로젝트 전체가 `async`/`await`를 안 쓰고
+  코루틴+이벤트/콜백 스타일이라(`SlideJudge`/`FeverSystem` 등), 여기도 코루틴 +
+  `Action<ApiResult<T>>` 콜백 방식으로 통일 — 굳이 새 비동기 스타일을 프로젝트에 들여오지
+  않음. 실패는 항상 `ApiResult.Success == false`로만 보고(예외 던지지 않음) — 로그인이
+  선택 사항이라 서버 응답 실패를 "정상적으로 있을 수 있는 일"로 다뤄야 함
+- **DTO는 `JsonUtility`로 직렬화**(로컬 세이브와 같은 방식, 새 JSON 라이브러리 없음) —
+  `JsonUtility`는 필드명을 그대로 JSON 키에 매핑하고 리네이밍 속성을 지원 안 해서,
+  `Network/ApiModels.cs`의 DTO 필드들은 일부러 C# 관례(PascalCase) 대신 서버 JSON 키와
+  맞춘 snake_case(`login_id`, `access_token` 등)로 씀
+- **`AuthService.cs`**: 싱글톤 아님(GameManager/ScoreManager/SaveSystem만 허용 원칙 유지) —
+  `GameBootstrapper`가 `CoinWallet`/`BirdCollection`과 같은 패턴으로 생성/배선.
+  `IsLoggedIn`/`ServerNickname` 상태 + `OnLoggedIn`/`OnLoggedOut`/`OnAuthError` 이벤트.
+  **여기서 관리하는 "서버 닉네임"은 `Meta/PlayerProfile.cs`의 로컬 닉네임과 완전히 다른
+  개념** — 일부러 합치지 않음(오프라인 세이브 데이터와 온라인 계정을 얽히게 하고 싶지
+  않았음). UI에서도 "온라인: {닉네임}"처럼 구분되게 표시
+- **`RankingService.cs`**: `/rankings`, `/rankings/me` 래핑 — 실제 UI 소비(Day Over 랭킹
+  패널)는 아직 Phase C 대기 중, 이번엔 네트워킹 레이어만 완성
+- **토큰 저장**: `SaveData.authToken`(신규 필드)에 평문 JSON으로 저장 — **보안 저장소
+  아님**(Keychain/Keystore 아님), 이 하비 프로젝트 위협 모델에서는 허용 가능한 수준으로
+  판단, 나중에 필요해지면 손볼 항목으로 코드 주석에 남김. 앱 시작 시(`GameBootstrapper`)
+  저장된 토큰이 있으면 `GET /auth/me`로 유효성 검증 — 성공하면 로그인 상태 복원, 실패
+  (만료/서버 다운 등)하면 조용히 로그아웃 상태로 폴백(**절대 시작을 막지 않음**)
+- **`UIFactory.CreateInputField`에 비밀번호 모드 추가**(`password: true` 파라미터) —
+  `TMP_InputField.ContentType.Password`로 마스킹
+
+### 시작 화면 로그인/회원가입 UI (`StartScreen.cs`)
+- 우상단에 코인/기록보기/언어전환 버튼 아래 네 번째 버튼 — **로그아웃 상태일 땐 "로그인"
+  버튼(누르면 로그인/회원가입 폼 모달이 뜸), 로그인 상태일 땐 "{서버 닉네임} · 로그아웃"
+  으로 라벨과 동작이 같이 바뀜** — 버튼 슬롯 하나로 상태 두 개를 다 처리(상태 텍스트를
+  따로 안 두고 단순화)
+- 로그인/회원가입 폼은 기존 리더보드 패널과 같은 토글 그룹 패턴(백드롭 + 화면 중앙 고정
+  크기 패널, 리사이즈 시 패널만 재중앙정렬) — 아이디/비밀번호 입력 필드(비밀번호는 마스킹),
+  "로그인"/"회원가입" 버튼 둘 다 같은 두 필드로 동작(입력값 재사용), 에러 메시지 텍스트(서버
+  `{"detail": "..."}` 메시지를 그대로 보여줌, 별도 번역 안 함 — 서버 에러 문자열까지
+  다국어화하는 건 이번 스코프 밖), 닫기 버튼
+- **닉네임 입력 필드에 이미 적용했던 스페이스바 가드를 아이디/비밀번호 필드에도 확장** —
+  두 필드 중 하나라도 포커스 상태면 스페이스바로 런이 시작되지 않도록
+- 로그인/회원가입 성공(`AuthService.OnLoggedIn`) 시 폼을 자동으로 닫고 에러 메시지를 지움
+
+### 남은 것 (Phase C, 아직 안 함)
+- Day Over에서 로그인 상태면 그 런의 점수를 자동으로 `POST /scores` (실패해도 토스트만
+  띄우고 계속 진행 — 오프라인 재시도 큐는 이번 스코프 밖)
+- Day Over 화면에 "온라인 랭킹" 토글 패널(일간/주간/전체 탭 + 내 순위 강조), 로그아웃
+  상태면 랭킹 대신 로그인 유도 문구
 
 ## 구현 우선순위 / 진행 상황
 
@@ -549,13 +747,24 @@ Canvas 계층을 코드로 만들어 두고(에디터 수동 설정 없음, 기�
 6. **M6 — 컬렉션**: ✅ 구현 완료 (2026-08-17). 새 5종 + Perk(`BirdPool`/`BirdCollection`), 알
    가챠(500코인), 홈 화면 새 선택 줄, 로컬 Top 10 리더보드(`Leaderboard`). **여기서 M5+M6
    둘 다 플레이 확인 필요 — 확인 후 M7 진행.**
-7. **M7 — 폴리시**: 🚧 진행 중, 계획된 항목은 전부 구현 완료. 카메라 줌, 다이브 먼지/Fever
-   별 트레일, 하늘 그라데이션/태양·달·별/섬별 10색 팔레트, **프로시저럴 합성 사운드**
-   (`Audio/`, 신호음 수준 — 실제 오디오 에셋 아님), **성능(GC 할당 정적 리뷰 기반 제거)**,
-   **OnGUI→UGUI/TextMeshPro 교체**(`UI/UIFactory.cs`/`UI/UIFontProvider.cs` 신규) 완료 —
-   **전부 플레이 확인 필요** (M7 항목 전체가 아직 사용자가 직접 플레이 확인 안 함). UI
-   교체분은 특히 **한글 텍스트 렌더링(`UIFontProvider`)부터 확인할 것** — 정적 리뷰로만
-   만든 가장 위험한 부분.
+7. **M7 — 폴리시**: ✅ 완료 (2026-08-18). 카메라 줌, 다이브 먼지/Fever 별 트레일, 하늘
+   그라데이션/태양·달·별/섬별 10색 팔레트, 프로시저럴 합성 사운드(`Audio/`, 신호음 수준 —
+   실제 오디오 에셋 아님), 성능(GC 할당 정적 리뷰 기반 제거), OnGUI→UGUI/TextMeshPro 교체
+   (`UI/UIFactory.cs`/`UI/UIFontProvider.cs` 신규, 한글 렌더링 포함) 전부 플레이 확인 완료.
+   **계획했던 M1~M7 전 마일스톤이 이제 완료 상태.** 추가로, M7에서 스킵했던 뒷배경 패럴랙스
+   언덕 + 잔디 tuft(`Terrain/BackgroundHillGenerator.cs`/`Terrain/GrassTuftGenerator.cs`
+   신규)도 마저 구현함 — 플레이 확인 완료.
+8. **포스트-M7 — 다국어/닉네임**: ✅ 구현 완료 (2026-08-18). 한/영 전환(`Core/Localization.cs`,
+   시작 화면 우상단 토글 버튼), 자동 생성/재생성/직접입력 가능한 닉네임(`Meta/PlayerProfile.cs`,
+   `Meta/NicknameGenerator.cs`, 시작 화면 좌상단 입력 필드). **플레이 확인 필요** — 특히
+   언어 전환 시 화면 전체(시작/HUD/Day Over/미션/새 이름) 텍스트가 다 같이 바뀌는지, 닉네임
+   입력 중 스페이스바로 런이 실수로 시작되지 않는지.
+9. **온라인 계정/랭킹**: 🚧 Phase A(백엔드)+B(네트워킹/로그인 UI) 완료 (2026-08-18), **Phase
+   C(점수 자동 제출 + Day Over 랭킹 패널)는 아직 안 함**. 백엔드는 curl로 전체 플로우
+   검증 완료. Unity 쪽은 **플레이 확인 전혀 안 됨** — `docker compose up`으로 로컬 서버를
+   띄운 상태에서 시작 화면의 로그인/회원가입 폼, 로그인 후 닉네임 표시/로그아웃, 서버가
+   꺼져 있을 때도 오프라인 플레이가 100% 정상 동작하는지(가장 중요한 불변 조건)를 반드시
+   확인할 것.
 
 ## 하지 말 것
 
@@ -606,6 +815,26 @@ Canvas 계층을 코드로 만들어 두고(에디터 수동 설정 없음, 기�
       맞는지 (M7 — UGUI 포팅 후 재확인)
 - [ ] 창 크기/해상도를 바꿔도 HUD·시작 화면 요소들이 화면 밖으로 안 나가는지 (M7 — 새로
       생긴 리사이즈 가드 로직 검증)
+- [ ] 뒷배경 언덕이 전경 언덕보다 느리게 스크롤되는지(패럴랙스), 완만한 크레스트 위에 잔디
+      tuft가 보이는지, 섬이 바뀌면 색도 같이 바뀌는지 (M7)
+- [ ] 시작 화면 우상단 언어 전환 버튼을 누르면 화면 전체(부제/버튼/헤더/미션 설명/새 이름·
+      Perk/리더보드/Day Over 화면까지) 텍스트가 즉시 한/영으로 바뀌는지, 앱을 껐다 켜도
+      마지막으로 고른 언어가 유지되는지 (포스트-M7)
+- [ ] 시작 화면 좌상단 닉네임이 최초 실행 시 자동 생성되는지, "재생성" 버튼으로 새로
+      뽑히는지, 입력 필드에 직접 타이핑해서 바꿀 수 있는지(포커스 벗어나면 저장), 앱을
+      껐다 켜도 유지되는지 (포스트-M7)
+- [ ] **닉네임 입력 중 스페이스바를 눌러도 게임이 실수로 시작되지 않는지** (포스트-M7 —
+      입력 필드 포커스 가드 확인)
+- [ ] **`FlyingChick-Server`를 끈 상태(또는 `apiBaseUrl`을 일부러 틀리게)에서도 게임이
+      아무 문제 없이 완전히 오프라인으로 플레이되는지** — 온라인 계정 기능 전체에서 가장
+      중요한 불변 조건. 시작 화면 진입, 로그인 버튼 클릭 시 서버 에러가 나도 오프라인 UI가
+      멀쩡한지 확인
+- [ ] `docker compose up`으로 로컬 서버를 띄운 상태에서: 회원가입 → 자동 로그인 →
+      우상단 버튼이 "{닉네임} · 로그아웃"으로 바뀌는지, 앱을 껐다 켜도 로그인 상태가
+      유지되는지(`GET /auth/me` 토큰 검증), 로그아웃이 정상 동작하는지, 아이디/비밀번호
+      입력 중 스페이스바로 런이 시작되지 않는지 (온라인 계정 Phase B)
+- [ ] 틀린 비밀번호/중복 아이디로 로그인·회원가입 시도 시 서버 에러 메시지가 폼에 그대로
+      뜨는지 (온라인 계정 Phase B)
 
 ## 실행 방법
 
@@ -617,13 +846,23 @@ Canvas 계층을 코드로 만들어 두고(에디터 수동 설정 없음, 기�
 같이 설치되는 Liberation Sans SDF는 라틴 전용이라 한글 텍스트에는 안 쓰임(우리 코드는 항상
 자체 한글 폰트를 명시적으로 꽂음).
 
+**온라인 계정/랭킹 기능을 테스트하려면(선택 사항 — 안 띄워도 게임은 정상 플레이됨)**:
+`~/src/FlyingChick-Server`에서 `docker compose up --build`로 로컬 백엔드를 먼저 띄울 것.
+`GameBootstrapper`의 `apiBaseUrl` 필드(기본값 `http://localhost:8000`)가 이 서버를 가리킴.
+서버를 안 띄워도 로그인 버튼을 누르면 에러 메시지만 뜨고 오프라인 플레이는 그대로 정상
+동작해야 함 — 이게 깨지면 버그.
+
 빈 GameObject에 `GameBootstrapper` 컴포넌트만 붙이고 Play — 카메라/지형/새/점수 시스템/HUD/
 낮밤 사이클/시작·종료 화면이 전부 런타임에 코드로 조립된다.
 
-1. **시작 화면**: 타이틀 + Best 점수, 우상단 코인 총액 + "기록 보기" 버튼(Top 10 + 누적
-   통계 패널 토글), 좌하단 오늘의 미션 패널, 하단 보유 새 선택 줄(클릭해서 선택) + 알
-   구매 버튼(500코인, 부화 결과 토스트 표시). **이 버튼들이 아닌 빈 곳**을 터치/클릭하거나
-   스페이스바를 누르면 시작
+1. **시작 화면**: 타이틀 + Best 점수, 좌상단 닉네임 입력 필드(직접 수정 가능) + "재생성"
+   버튼, 우상단 코인 총액 + "기록 보기" 버튼(Top 10 + 누적 통계 패널 토글) + 언어 전환
+   버튼(한/영, 지금 언어가 아니라 눌렀을 때 바뀔 언어를 표시) + 로그인/로그아웃 버튼(로그인
+   상태면 "{서버 닉네임} · 로그아웃"으로 표시 — 시작 화면 좌상단의 로컬 닉네임과는 다른
+   별개의 온라인 계정 닉네임), 좌하단 오늘의 미션 패널, 하단 보유 새 선택 줄(클릭해서 선택)
+   + 알 구매 버튼(500코인, 부화 결과 토스트 표시). **이 버튼들이 아닌 빈 곳**을 터치/클릭하거나
+   스페이스바를 누르면 시작(닉네임/아이디/비밀번호 입력 필드에
+   포커스가 있을 땐 스페이스바로 시작되지 않음)
 2. **플레이 중**: 마우스 클릭/터치/스페이스바를 내리막에서 누르고 있으면 가속. 좌상단 점수,
    우상단 Island·배수 + 낮 진행바, 좌하단 "STREAK n/3" 라벨 + 점 3개, 좌측에 이번 런 Nest
    목표 3개 + 진행률, 화면 중앙 상단(Fever 중이면) 펄스하는 분홍 FEVER 뱃지, 중앙에

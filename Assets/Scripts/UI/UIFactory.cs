@@ -127,6 +127,43 @@ namespace FlyingChick
             return btn;
         }
 
+        // Minimal runtime TMP_InputField: background Image + a masked
+        // "Text Area" holding the actual TMP_Text the input field types
+        // into. This is the standard TMP_InputField hierarchy (Editor's
+        // "Create > UI > Input Field - TextMeshPro" builds the same shape),
+        // just assembled by hand since everything here is code-driven.
+        public static TMP_InputField CreateInputField(Transform parent, string name, int fontSize, Color textColor, int characterLimit = 0, bool password = false)
+        {
+            var rt = CreateChild(parent, name);
+            var bg = rt.gameObject.AddComponent<Image>();
+            bg.sprite = WhiteSprite;
+            bg.color = new Color(1f, 1f, 1f, 0.9f);
+
+            var textAreaRt = CreateChild(rt, "Text Area");
+            textAreaRt.gameObject.AddComponent<RectMask2D>();
+            StretchFull(textAreaRt);
+            textAreaRt.offsetMin = new Vector2(8f, 4f);
+            textAreaRt.offsetMax = new Vector2(-8f, -4f);
+
+            var textComponent = CreateText(textAreaRt, "Text", fontSize, textColor, TextAlignmentOptions.MidlineLeft);
+            StretchFull((RectTransform)textComponent.transform);
+
+            var inputField = rt.gameObject.AddComponent<TMP_InputField>();
+            inputField.targetGraphic = bg;
+            inputField.textViewport = textAreaRt;
+            inputField.textComponent = textComponent;
+            inputField.lineType = TMP_InputField.LineType.SingleLine;
+            if (characterLimit > 0) inputField.characterLimit = characterLimit;
+            if (password)
+            {
+                inputField.contentType = TMP_InputField.ContentType.Password;
+                inputField.inputType = TMP_InputField.InputType.Password;
+                inputField.ForceLabelUpdate();
+            }
+
+            return inputField;
+        }
+
         // A fully transparent, full-screen button used as a "tap anywhere to
         // start" catcher (see StartScreen). Must be created BEFORE any real
         // buttons under the same parent -- later siblings render on top and

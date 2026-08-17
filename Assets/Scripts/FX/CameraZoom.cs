@@ -18,6 +18,7 @@ namespace FlyingChick
     public class CameraZoom : MonoBehaviour
     {
         [SerializeField] private float margin = 60f; // world-unit padding so the bird isn't glued to the edge
+        [SerializeField] private float heightMultiplier = 1.6f; // extra zoom-out headroom, scales with bird height (tuned up from "just barely fits" per feedback)
         [SerializeField] private float maxOrthoSizeMultiplier = 4f; // safety ceiling, not a normal-gameplay limit
         [SerializeField] private float zoomOutSmoothTime = 0.12f; // fast enough to keep up with a launch
         [SerializeField] private float zoomInSmoothTime = 0.35f; // slower/gentler when returning to baseline
@@ -40,10 +41,13 @@ namespace FlyingChick
 
             // Camera sits at world Y = 0, so its current vertical view spans
             // [-orthographicSize, +orthographicSize]. Figure out how big
-            // that half-height needs to be for the bird's actual Y (plus
-            // margin) to fit inside it.
+            // that half-height needs to be for the bird's actual Y (scaled
+            // by heightMultiplier, plus a flat margin) to fit inside it --
+            // heightMultiplier > 1 means the camera pulls back further than
+            // the bare minimum needed to keep the bird on-screen, so the
+            // zoom-out reads as more dramatic instead of just barely enough.
             float birdY = bird.transform.position.y;
-            float neededHalfHeight = Mathf.Max(baseOrthoSize, Mathf.Abs(birdY) + margin);
+            float neededHalfHeight = Mathf.Max(baseOrthoSize, Mathf.Abs(birdY) * heightMultiplier + margin);
             float targetSize = Mathf.Min(neededHalfHeight, baseOrthoSize * maxOrthoSizeMultiplier);
 
             float smoothTime = targetSize > cam.orthographicSize ? zoomOutSmoothTime : zoomInSmoothTime;

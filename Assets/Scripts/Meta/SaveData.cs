@@ -26,5 +26,17 @@ namespace FlyingChick
         public int[] topScores = new int[0]; // sorted desc, capped at 10
         public int totalSlidesAllTime;
         public int totalRuns; // "총 비행일 수" -- one completed run = one day flown
+
+        // Localization/nickname feature.
+        public int language; // Language enum cast to int; 0 = Korean (default)
+        public string nickname = "";
+
+        // Online account (FlyingChick-Server) -- JWT access token from a
+        // previous login/signup, re-validated against GET /auth/me on
+        // startup (see AuthService.ValidateStoredToken). Empty means
+        // logged out. Plain JSON on disk is NOT secure storage; acceptable
+        // for this hobby project's threat model, flagged as a future
+        // hardening item (Keychain/Keystore) if it ever matters.
+        public string authToken = "";
     }
 }

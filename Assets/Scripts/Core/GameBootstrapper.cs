@@ -24,11 +24,22 @@ namespace FlyingChick
     // dust + Fever star trail particles; per-island palette sky gradient +
     // sun/moon/stars; procedurally-synthesized SFX + ambient BGM; GC-alloc
     // cleanup pass; OnGUI -> UGUI/TextMeshPro UI (HUD/StartScreen/
-    // DayOverScreen), which is why an EventSystem now gets created here too.
+    // DayOverScreen), which is why an EventSystem now gets created here too;
+    // parallax background hill + grass tufts along the terrain crest.
+    // Post-M7 (from the original spec, not part of the M1-M7 plan itself):
+    // Korean/English localization (Core/Localization.cs) and an
+    // auto-generated, rerollable/editable player nickname
+    // (Meta/PlayerProfile.cs, Meta/NicknameGenerator.cs). Also an OPTIONAL
+    // online account layer (Network/ApiClient.cs, AuthService.cs,
+    // RankingService.cs) talking to a separate backend
+    // (~/src/FlyingChick-Server, FastAPI + MySQL, see its own README) --
+    // login unlocks online score rankings but the game is fully playable
+    // offline with zero account, always.
     public class GameBootstrapper : MonoBehaviour
     {
         [SerializeField] private float viewHeight = 720f;
         [SerializeField] private int terrainSeed = 0; // 0 = random each run
+        [SerializeField] private string apiBaseUrl = "http://localhost:8000"; // FlyingChick-Server; see Network/ApiClient.cs
 
         private void Start()
         {
@@ -61,6 +72,37 @@ namespace FlyingChick
             // exist before them.
             var saveGO = new GameObject("SaveSystem");
             saveGO.AddComponent<SaveSystem>();
+
+            // Localization.LoadSaved() needs SaveSystem.Instance, and needs
+            // to run before anything (mission/bird descriptions, UI text)
+            // calls Localization.Get() -- otherwise a couple of frames
+            // would render in the default (Korean) language before
+            // snapping to the saved one.
+            Localization.LoadSaved();
+
+            var profileGO = new GameObject("PlayerProfile");
+            var profile = profileGO.AddComponent<PlayerProfile>();
+            profile.Configure();
+
+            // Online account (FlyingChick-Server, a separate FastAPI/MySQL
+            // codebase -- ~/src/FlyingChick-Server). Entirely optional: a
+            // failed/unreachable server just leaves the player logged out,
+            // never blocks startup or offline play. See AuthService's
+            // class comment.
+            var apiGO = new GameObject("ApiClient");
+            var api = apiGO.AddComponent<ApiClient>();
+            api.Configure(apiBaseUrl);
+
+            var authGO = new GameObject("AuthService");
+            var auth = authGO.AddComponent<AuthService>();
+            auth.Configure(api);
+
+            var rankingGO = new GameObject("RankingService");
+            var ranking = rankingGO.AddComponent<RankingService>();
+            ranking.Configure(api);
+
+            if (SaveSystem.Instance != null && !string.IsNullOrEmpty(SaveSystem.Instance.Data.authToken))
+                auth.ValidateStoredToken(SaveSystem.Instance.Data.authToken);
 
             int seed = terrainSeed != 0 ? terrainSeed : UnityEngine.Random.Range(1, int.MaxValue);
             var gmGO = new GameObject("GameManager");
@@ -108,6 +150,14 @@ namespace FlyingChick
             var dayCycle = dayGO.AddComponent<DayCycle>();
             terrain.SetDayCycle(dayCycle);
 
+            var backHillGO = new GameObject("BackgroundHill");
+            var backHill = backHillGO.AddComponent<BackgroundHillGenerator>();
+            backHill.SetDayCycle(dayCycle);
+
+            var grassGO = new GameObject("GrassTufts");
+            var grass = grassGO.AddComponent<GrassTuftGenerator>();
+            grass.SetDayCycle(dayCycle);
+
             var skyGO = new GameObject("SkyRenderer");
             var sky = skyGO.AddComponent<SkyRenderer>();
             sky.Configure(cam, dayCycle, gm);
@@ -153,7 +203,7 @@ namespace FlyingChick
             hud.BindMeta(nest);
 
             var startScreen = gameObject.AddComponent<StartScreen>();
-            startScreen.Bind(wallet, dailyMissions, collection, leaderboard, audio);
+            startScreen.Bind(wallet, dailyMissions, collection, leaderboard, audio, profile, auth);
 
             var dayOverScreen = gameObject.AddComponent<DayOverScreen>();
             dayOverScreen.Bind(score, slideJudge, cloudSpawner, fever, gm, wallet, nest, audio);

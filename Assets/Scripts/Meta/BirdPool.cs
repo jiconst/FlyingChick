@@ -17,24 +17,27 @@ namespace FlyingChick
     public struct BirdDefinition
     {
         public string Id;
-        public string Name;
         public Color BodyColor;
         public Color WingColor;
         public Color BellyColor;
         public PerkType Perk;
         public float PerkValue;
-        public string PerkDescription;
 
-        public BirdDefinition(string id, string name, Color body, Color wing, Color belly, PerkType perk, float perkValue, string perkDescription)
+        // Localized at read time, same reasoning as MissionDefinition.Description.
+        public string Name => Localization.Get($"bird.{Id}");
+
+        public string PerkDescription => Perk == PerkType.None
+            ? Localization.Get("perk.none")
+            : string.Format(Localization.Get($"perk.{Perk}"), Perk == PerkType.SlideScoreBonus ? PerkValue * 100f : PerkValue);
+
+        public BirdDefinition(string id, Color body, Color wing, Color belly, PerkType perk, float perkValue)
         {
             Id = id;
-            Name = name;
             BodyColor = body;
             WingColor = wing;
             BellyColor = belly;
             Perk = perk;
             PerkValue = perkValue;
-            PerkDescription = perkDescription;
         }
     }
 
@@ -45,25 +48,25 @@ namespace FlyingChick
 
         public static readonly BirdDefinition[] All =
         {
-            new BirdDefinition("chick_yellow", "노랑 병아리",
+            new BirdDefinition("chick_yellow",
                 new Color(1f, 0.86f, 0.25f), new Color(0.93f, 0.72f, 0.15f), new Color(1f, 0.97f, 0.82f),
-                PerkType.None, 0f, "기본 병아리"),
+                PerkType.None, 0f),
 
-            new BirdDefinition("chick_red", "빨강 병아리",
+            new BirdDefinition("chick_red",
                 new Color(0.95f, 0.35f, 0.25f), new Color(0.8f, 0.2f, 0.15f), new Color(1f, 0.85f, 0.75f),
-                PerkType.SlideScoreBonus, 0.10f, "슬라이드 점수 +10%"),
+                PerkType.SlideScoreBonus, 0.10f),
 
-            new BirdDefinition("chick_blue", "파랑 병아리",
+            new BirdDefinition("chick_blue",
                 new Color(0.3f, 0.6f, 0.95f), new Color(0.2f, 0.45f, 0.8f), new Color(0.85f, 0.93f, 1f),
-                PerkType.FeverDurationBonus, 1f, "Fever 지속시간 +1초"),
+                PerkType.FeverDurationBonus, 1f),
 
-            new BirdDefinition("chick_green", "초록 병아리",
+            new BirdDefinition("chick_green",
                 new Color(0.4f, 0.8f, 0.35f), new Color(0.25f, 0.6f, 0.2f), new Color(0.9f, 1f, 0.85f),
-                PerkType.CoinMagnet, 20f, "코인 획득 범위 +20"),
+                PerkType.CoinMagnet, 20f),
 
-            new BirdDefinition("chick_purple", "보라 병아리",
+            new BirdDefinition("chick_purple",
                 new Color(0.65f, 0.4f, 0.9f), new Color(0.5f, 0.25f, 0.75f), new Color(0.92f, 0.85f, 1f),
-                PerkType.StartSpeedBonus, 50f, "시작 속도 +50"),
+                PerkType.StartSpeedBonus, 50f),
         };
 
         public static BirdDefinition Find(string id)
