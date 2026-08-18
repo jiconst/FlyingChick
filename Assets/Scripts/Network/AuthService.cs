@@ -30,6 +30,7 @@ namespace FlyingChick
         public event Action OnLoggedIn;
         public event Action OnLoggedOut;
         public event Action<string> OnAuthError; // human-readable message
+        public event Action OnNicknameChanged; // ServerNickname 값이 바뀔 때마다(로그인/회원가입 포함) — PlayerProfile.OnNicknameChanged와 같은 패턴
 
         public void Configure(ApiClient apiClient)
         {
@@ -86,17 +87,17 @@ namespace FlyingChick
             if (!IsLoggedIn) return;
             api.Post<NicknameResponse>("/auth/nickname/reroll", result =>
             {
-                if (result.Success) ServerNickname = result.Data.nickname;
+                if (result.Success) { ServerNickname = result.Data.nickname; OnNicknameChanged?.Invoke(); }
                 else ReportError(result.Error);
             });
         }
 
         public void SetNickname(string nickname)
         {
-            if (!IsLoggedIn || string.IsNullOrEmpty(nickname)) return;
+            if (!IsLoggedIn || string.IsNullOrEmpty(nickname) || nickname == ServerNickname) return;
             api.Put<NicknameResponse>("/auth/nickname", new NicknameSetRequest { nickname = nickname }, result =>
             {
-                if (result.Success) ServerNickname = result.Data.nickname;
+                if (result.Success) { ServerNickname = result.Data.nickname; OnNicknameChanged?.Invoke(); }
                 else ReportError(result.Error);
             });
         }
@@ -114,6 +115,7 @@ namespace FlyingChick
             IsLoggedIn = true;
             Persist(result.Data.access_token);
             OnLoggedIn?.Invoke();
+            OnNicknameChanged?.Invoke();
         }
 
         private void ReportError(string error)

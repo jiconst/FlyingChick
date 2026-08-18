@@ -46,6 +46,21 @@ namespace FlyingChick
             return rt;
         }
 
+        // 순수 레이아웃 컨테이너용(그 자체는 안 그려지고, 안에 SetTopLeft/
+        // SetTopLeftCentered로 절대좌표 배치되는 자식들을 담는 그룹).
+        // CreateChild가 만드는 RectTransform은 새로 생성될 때 부모 중앙에
+        // 고정 크기(기본값)로 놓이는데, 그 상태로 그냥 쓰면 자식들의
+        // "화면 절대좌표" 계산 기준(부모 rect의 좌상단)이 실제 캔버스
+        // 좌상단이 아니라 이 작은 기본 박스의 좌상단이 되어버려서 배치가
+        // 완전히 틀어짐 — 반드시 StretchFull로 부모(보통 캔버스) 크기에
+        // 맞춰 늘려야 함.
+        public static RectTransform CreateFullStretchChild(Transform parent, string name)
+        {
+            var rt = CreateChild(parent, name);
+            StretchFull(rt);
+            return rt;
+        }
+
         // Top-left origin, matches `new Rect(x, y, w, h)` from OnGUI exactly.
         public static void SetTopLeft(RectTransform rt, float x, float y, float w, float h)
         {
@@ -212,23 +227,6 @@ namespace FlyingChick
             slider.value = value;
 
             return slider;
-        }
-
-        // A fully transparent, full-screen button used as a "tap anywhere to
-        // start" catcher (see StartScreen). Must be created BEFORE any real
-        // buttons under the same parent -- later siblings render on top and
-        // intercept clicks first, so this only ever fires when nothing else
-        // was hit.
-        public static Button CreateFullScreenTapCatcher(Transform parent, string name)
-        {
-            var rt = CreateChild(parent, name);
-            StretchFull(rt);
-            var img = rt.gameObject.AddComponent<Image>();
-            img.color = new Color(0f, 0f, 0f, 0f);
-            var btn = rt.gameObject.AddComponent<Button>();
-            btn.targetGraphic = img;
-            btn.navigation = new Navigation { mode = Navigation.Mode.None };
-            return btn;
         }
     }
 }

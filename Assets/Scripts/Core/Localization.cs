@@ -85,14 +85,24 @@ namespace FlyingChick
             ["auth.loginIdLabel"] = ("아이디", "ID"),
             ["auth.passwordLabel"] = ("비밀번호", "Password"),
 
-            // 메인 메뉴 (게임플레이/설정/게임 방법/기록 4개 버튼) 및 하위 화면들.
-            ["menu.play"] = ("게임플레이", "Play"),
+            // 메인 메뉴 (PLAY/설정/기록/게임 방법 4개 버튼, 스크린샷 참고 레이아웃)와 하위 화면들.
+            // PLAY는 이제 화면 전환 없이 바로 게임을 시작함 — "게임플레이"라는
+            // 화면 이름이 아니라 버튼 동사라 "플레이"로 바꿈.
+            ["menu.play"] = ("플레이", "Play"),
             ["menu.settings"] = ("설정", "Settings"),
+            ["menu.stats"] = ("기록", "Stats"),
             ["menu.howToPlay"] = ("게임 방법", "How to Play"),
             ["menu.back"] = ("뒤로", "Back"),
 
+            ["stats.tabLeaderboard"] = ("기록", "Leaderboard"),
+            ["stats.tabBirds"] = ("새 선택", "Birds"),
+            ["stats.tabMissions"] = ("일일미션", "Missions"),
+
             ["settings.music"] = ("음악", "Music"),
             ["settings.sfx"] = ("효과음", "Sound Effects"),
+            ["settings.accountEntry"] = ("로그인 / 회원가입", "Log In / Sign Up"),
+            ["settings.nicknameStepTitle"] = ("닉네임을 정해주세요", "Choose your nickname"),
+            ["settings.nicknameStepDone"] = ("완료", "Done"),
 
             ["howtoplay.body"] = (
                 "내리막에서 화면을 누르고 있으면 병아리가 빠르게 하강합니다.\n" +
