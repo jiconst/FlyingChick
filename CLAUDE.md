@@ -1022,3 +1022,20 @@ STATS 하위 탭으로 통합 · 설정 진입 시 로그인/회원가입 선택
    발생하는가"에도 영향을 준다는 걸 같이 고려할 것 — 그냥 조건을 낮추는 것만으로 부작용이
    생길 수 있음.** `MinAirborneTimeForJudging`(0.15초) 미만 체공은 판정 자체를 스킵하는
    디바운스로 해결.
+7. **메인 메뉴 타이틀/버튼이 화면 우측 하단에 표시되는 버그**: `StartScreen`의
+   `mainMenuGroup`/`settingsGroup` 등 "순수 레이아웃 그룹 컨테이너"들을
+   `UIFactory.CreateChild(...)`로만 만들고 별도 크기 지정을 안 함 →
+   새로 생성된 RectTransform은 부모 중앙에 작은 기본 크기로 놓이는데, 그 자식들이
+   `SetTopLeft`/`SetTopLeftCentered`로 쓰는 "화면 절대좌표" 계산은 부모 rect의
+   좌상단을 기준으로 하기 때문에, 기준점이 실제 캔버스 좌상단이 아니라 이 작은
+   기본 박스의 좌상단이 되어버려 타이틀/버튼 전체가 우측 하단으로 쏠려 보임.
+   **교훈: 그 자체는 안 그려지고 자식들을 절대좌표로 배치하기 위한 용도로만 쓰는
+   그룹 컨테이너는 반드시 부모(보통 캔버스) 크기에 맞춰 명시적으로 늘려야 함.**
+   `UIFactory.CreateFullStretchChild`(`CreateChild` + `StretchFull`)를 추가하고
+   `StartScreen`의 모든 그룹 컨테이너 생성 지점(`mainMenuGroup`, `settingsGroup`,
+   `howToPlayGroup`, `statsGroup`, `settingsPreferencesGroup`,
+   `settingsAuthChoiceGroup`, `settingsCredentialsGroup`,
+   `settingsSignupNicknameGroup`, `statsLeaderboardGroup`, `statsBirdsGroup`,
+   `statsMissionsGroup`)를 이걸로 교체해 해결. 개별 요소(버튼 하나 등)처럼 스스로
+   `SetTopLeft`로 크기까지 지정하는 자식은 이 문제와 무관하므로 그대로 `CreateChild`
+   사용.
