@@ -56,6 +56,7 @@ namespace FlyingChick
         private Camera cam;
         private CoinSpawner coinSpawner;
         private CloudSpawner cloudSpawner;
+        private SkyOrbSpawner skyOrbSpawner;
         private NestMultiplier nest;
 
         private readonly List<Toast> toasts = new List<Toast>();
@@ -118,6 +119,12 @@ namespace FlyingChick
             cloudSpawner.OnPickupPopup += HandlePickupPopup;
         }
 
+        public void BindSkyOrb(SkyOrbSpawner skyOrbSpawnerRef)
+        {
+            skyOrbSpawner = skyOrbSpawnerRef;
+            skyOrbSpawner.OnPickupPopup += HandlePickupPopup;
+        }
+
         private void HandlePickupPopup(Vector3 worldPos, string text, Color color)
         {
             pickupToasts.Add(new PositionedToast { Text = text, Color = color, WorldPos = worldPos, Duration = pickupToastDuration, TimeLeft = pickupToastDuration });
@@ -133,6 +140,7 @@ namespace FlyingChick
             if (fever != null) fever.OnFeverStart -= HandleFeverStart;
             if (coinSpawner != null) coinSpawner.OnPickupPopup -= HandlePickupPopup;
             if (cloudSpawner != null) cloudSpawner.OnPickupPopup -= HandlePickupPopup;
+            if (skyOrbSpawner != null) skyOrbSpawner.OnPickupPopup -= HandlePickupPopup;
         }
 
         private void HandleGreatSlide(int streak, int gained)
@@ -159,10 +167,12 @@ namespace FlyingChick
 
             var scorePanel = UIFactory.CreatePanel(t, "ScorePanel", new Color(0f, 0f, 0f, 0.4f));
             scorePanelRect = (RectTransform)scorePanel.transform;
-            UIFactory.SetTopLeft(scorePanelRect, 12, 8, 260, 56);
+            UIFactory.SetTopLeft(scorePanelRect, 12, 8, 300, 70);
 
-            scoreText = UIFactory.CreateText(t, "Score", 38, new Color(1f, 0.95f, 0.75f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            UIFactory.SetTopLeft((RectTransform)scoreText.transform, 24, 14, 300, 48);
+            // 폰트 키움(38->52) 요청 -- 우측 상단에 있던 해 지는 프로그레스바를
+            // 이 옆으로 옮겨왔으므로(UpdateDayClock), 패널 크기도 같이 키움.
+            scoreText = UIFactory.CreateText(t, "Score", 52, new Color(1f, 0.95f, 0.75f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            UIFactory.SetTopLeft((RectTransform)scoreText.transform, 24, 10, 340, 60);
 
             midText = UIFactory.CreateText(t, "IslandMult", 18, brown);
             midRect = (RectTransform)midText.transform;
@@ -331,16 +341,19 @@ namespace FlyingChick
 
         private void UpdateDayClock()
         {
-            const float trackW = 100f, trackH = 10f;
-            UIFactory.SetTopLeft(dayTrackRect, Screen.width - 120f, 48f, trackW, trackH);
+            // 요청: 우측 상단에 있던 걸 이동한 거리(Score) 수치 옆으로, 커진
+            // 폰트 크기에 맞춰 바도 같이 키움 (100x10 -> 135x14, 태양 24 -> 32).
+            // 스코어 패널이 (12, 8, 300, 70)이므로 그 오른쪽에 붙임.
+            const float trackX = 340f, trackY = 36f, trackW = 135f, trackH = 14f;
+            UIFactory.SetTopLeft(dayTrackRect, trackX, trackY, trackW, trackH);
 
             float t = dayCycle.DayTime;
             ((RectTransform)dayTrackFill.transform).sizeDelta = new Vector2(trackW * t, 0f);
             dayTrackFill.color = Color.Lerp(new Color(1f, 0.6f, 0.15f), new Color(0.55f, 0.3f, 0.85f), t);
 
-            const float sunSize = 24f;
-            float sunX = Screen.width - 120f + trackW * t - sunSize * 0.5f;
-            float sunY = 48f + trackH * 0.5f - sunSize * 0.5f;
+            const float sunSize = 32f;
+            float sunX = trackX + trackW * t - sunSize * 0.5f;
+            float sunY = trackY + trackH * 0.5f - sunSize * 0.5f;
             UIFactory.SetTopLeft(sunIconRect, sunX, sunY, sunSize, sunSize);
         }
 

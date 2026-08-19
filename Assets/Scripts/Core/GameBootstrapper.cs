@@ -5,10 +5,11 @@ using UnityEngine.InputSystem.UI;
 namespace FlyingChick
 {
     // Wires the current milestone slice together at runtime so Play works
-    // with zero manual scene setup. The camera's POSITION stays completely
-    // fixed for the whole run -- the reference scrolls the world via
-    // ScrollX, not the bird/camera through world space. Its orthographicSize
-    // (zoom) can change though, see CameraZoom (M7).
+    // with zero manual scene setup. The camera's X position stays
+    // completely fixed for the whole run -- the reference scrolls the world
+    // via ScrollX, not the bird/camera through world space. Its
+    // orthographicSize (zoom) can change, and its Y position now rises
+    // while zoomed out too (sky-bias), see CameraZoom (M7).
     //
     // M1: terrain + bird physics + input.
     // M2 (added): Great Slide streak judging, Fever, island progression
@@ -146,6 +147,10 @@ namespace FlyingChick
             var cloudSpawner = cloudGO.AddComponent<CloudSpawner>();
             cloudSpawner.Configure(bird, cam, burst, seed + 2);
 
+            var skyOrbGO = new GameObject("SkyOrbSpawner");
+            var skyOrbSpawner = skyOrbGO.AddComponent<SkyOrbSpawner>();
+            skyOrbSpawner.Configure(bird, cam, burst, seed + 3);
+
             var dayGO = new GameObject("DayCycle");
             var dayCycle = dayGO.AddComponent<DayCycle>();
             terrain.SetDayCycle(dayCycle);
@@ -199,6 +204,7 @@ namespace FlyingChick
             var hud = gameObject.AddComponent<HUD>();
             hud.Bind(bird, score, slideJudge, fever, gm);
             hud.BindCollectibles(coinSpawner, cloudSpawner, cam);
+            hud.BindSkyOrb(skyOrbSpawner);
             hud.BindDayCycle(dayCycle);
             hud.BindMeta(nest);
 

@@ -18,15 +18,20 @@ namespace FlyingChick
         public static float ToWorldY(float canvasY, float viewHeight) =>
             viewHeight * 0.5f - canvasY;
 
-        // The camera sits at a fixed world position always (CameraZoom, M7,
-        // only ever changes orthographicSize, never transform.position), so
-        // zooming out reveals extra world space SYMMETRICALLY around that
-        // fixed center -- not just extra width to the right. These give the
-        // actual left/right canvas-space bounds currently on screen at the
-        // camera's current orthographicSize, vs. ToWorldX/ViewWidth above
-        // which always assume the baseline (orthographicSize == viewHeight/2)
-        // zoom level. Terrain/coin/cloud generation must sample this range,
-        // not [0, ViewWidth], or the edges go blank while zoomed out.
+        // The camera's X position is always fixed (CameraZoom, M7, never
+        // moves transform.position.x), so zooming out reveals extra world
+        // space SYMMETRICALLY around that fixed horizontal center -- not
+        // just extra width to the right. These give the actual left/right
+        // canvas-space bounds currently on screen at the camera's current
+        // orthographicSize, vs. ToWorldX/ViewWidth above which always
+        // assume the baseline (orthographicSize == viewHeight/2) zoom
+        // level. Terrain/coin/cloud generation must sample this range, not
+        // [0, ViewWidth], or the edges go blank while zoomed out.
+        // (Vertically the camera's Y position is NOT fixed anymore -- see
+        // CameraZoom's skyBias -- but nothing here needs a
+        // TopEdge/BottomEdge equivalent since ToWorldY-based content is
+        // placed once in world space and just becomes visible/hidden as the
+        // camera's view moves, not resampled like terrain/coins/clouds are.)
         public static float LeftEdgeCanvasX(float viewHeight, float aspect, float orthographicSize)
         {
             float baseline = ViewWidth(viewHeight, aspect);

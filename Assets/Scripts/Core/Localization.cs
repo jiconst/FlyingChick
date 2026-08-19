@@ -122,6 +122,10 @@ namespace FlyingChick
 
             ["hud.nestHeader"] = ("Nest 목표 (+{0} 배수)", "Nest Goals (+{0}x)"),
 
+            // 녹색 Sky Flight 오브 픽업 (Collectibles/SkyOrbSpawner.cs) -- 먹으면 잠깐
+            // 구름 위 하늘을 나는 듯한 강한 줌아웃 연출이 발동함.
+            ["skyorb.popup"] = ("SKY FLIGHT!", "SKY FLIGHT!"),
+
             ["mission.FeverTriggerCount"] = ("Fever {0}회 발동", "Trigger Fever {0} times"),
             ["mission.ReachIsland"] = ("{0}번째 섬 도달", "Reach island {0}"),
             ["mission.CollectCoins"] = ("코인 {0}개 획득", "Collect {0} coins"),

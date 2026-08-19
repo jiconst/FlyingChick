@@ -21,6 +21,13 @@ namespace FlyingChick
         public const float SpeedMin = 300f;
         public const float DiveAccel = 520f;
 
+        // Sky Flight orb buff (Collectibles/SkyOrbSpawner.cs): a real,
+        // physically-simulated soar instead of a camera trick, so the
+        // zoom naturally follows the bird's actual height (see StartSkyFlight).
+        // ~15% of GravAir -- floaty enough that a single launch stays up for
+        // several seconds instead of the usual sub-second hop.
+        public const float SkyFlightGravity = 220f;
+
         // Loosened from the reference's 0.06 / -0.10 / 0.9 per playtest
         // feedback -- landing a Great Slide (and therefore a 3-streak) felt
         // too dependent on precise timing. Registers a dive on gentler
@@ -62,6 +69,15 @@ namespace FlyingChick
         private readonly GroundSampler ground;
         private bool holdWasDownhill;
         private float airborneTime;
+        private float skyFlightTimeRemaining;
+
+        // Drives BirdController's continuous distance-score trickle while
+        // flying (see BirdController.FixedUpdate) -- without this, score
+        // only grows from landing/pickup EVENTS, none of which happen while
+        // high above the clouds, so it visibly stopped climbing for the
+        // whole buff ("녹색 공을 먹었을때도 지속적으로 측정이 되는 버전으로"
+        // feedback).
+        public bool IsSkyFlightActive => skyFlightTimeRemaining > 0f;
 
         public BirdPhysics(float canvasStartX, float radiusValue, GroundSampler groundSampler)
         {
@@ -74,6 +90,28 @@ namespace FlyingChick
         public void AddSpeed(float amount)
         {
             Speed = Mathf.Min(SpeedMax, Speed + amount);
+        }
+
+        // Sky Flight orb: kicks off a real, physically-simulated soar rather
+        // than just forcing the camera to zoom out -- see Step()'s gravity
+        // override below. Only applies the launch kick if a flight isn't
+        // already in progress (re-catching a second orb mid-flight just
+        // extends the timer via Mathf.Max, it doesn't re-kick velocity and
+        // jolt the arc).
+        //
+        // v0 = -g*duration/2 is the launch velocity for a SYMMETRIC
+        // ballistic arc under SkyFlightGravity that returns to roughly the
+        // same height exactly when duration elapses -- rise for the first
+        // half, glide near the top, ease back down for the second half, all
+        // through the exact same integrator normal flight uses (Step()
+        // below), so it reads as the bird actually flying, not a scripted
+        // hover.
+        public void StartSkyFlight(float duration)
+        {
+            if (skyFlightTimeRemaining <= 0f)
+                VerticalVelocity = -SkyFlightGravity * duration * 0.5f;
+
+            skyFlightTimeRemaining = Mathf.Max(skyFlightTimeRemaining, duration);
         }
 
         public void Reset(float scrollX)
@@ -99,11 +137,28 @@ namespace FlyingChick
             float worldBirdX = scrollX + CanvasX;
             float slope = ground.GroundSlope(worldBirdX);
 
-            if (Speed > SpeedBase) Speed -= 90f * dt;
-            if (Speed < SpeedBase) Speed += 60f * dt;
-            Speed = Mathf.Clamp(Speed, SpeedMin, SpeedMax);
+            if (skyFlightTimeRemaining > 0f) skyFlightTimeRemaining -= dt;
+            bool skyFlightActive = skyFlightTimeRemaining > 0f;
 
-            float g = holding ? GravHold : GravAir;
+            if (skyFlightActive)
+            {
+                // 요청("좀더 속도감있게"): 버프 도중엔 평소의 감속 로직을 끄고
+                // 최고 속도로 고정 -- 병아리가 실제로 붕 뜨는 것만으론 느리게
+                // 흘러가는 느낌이라, 지형/코인/구름이 아래로 빠르게 스쳐 지나가는
+                // 체감 속도가 있어야 "빠르게 하늘을 가른다"는 느낌이 남.
+                Speed = SpeedMax;
+            }
+            else
+            {
+                if (Speed > SpeedBase) Speed -= 90f * dt;
+                if (Speed < SpeedBase) Speed += 60f * dt;
+                Speed = Mathf.Clamp(Speed, SpeedMin, SpeedMax);
+            }
+
+            // While a Sky Flight buff is active, gravity is overridden
+            // regardless of `holding` -- the point is a graceful, mostly
+            // hands-off soar above the clouds, not a player-controlled dive.
+            float g = skyFlightActive ? SkyFlightGravity : (holding ? GravHold : GravAir);
             VerticalVelocity += g * dt;
             CanvasY += VerticalVelocity * dt;
 

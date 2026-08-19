@@ -69,8 +69,9 @@ namespace FlyingChick
             int steps = Mathf.Max(2, Mathf.CeilToInt((rightEdge - leftEdge) / sampleStep) + 1);
 
             // Same zoom-aware bottom edge as TerrainGenerator (see that
-            // file's comment on the fixed-vs-current-orthographicSize bug).
-            float bottomY = -cam.orthographicSize - fillDepth;
+            // file's comment on the fixed-vs-current-orthographicSize bug,
+            // and on CameraZoom's sky-bias Y shift).
+            float bottomY = cam.transform.position.y - cam.orthographicSize - fillDepth;
 
             vertexBuffer.Clear();
             colorBuffer.Clear();

@@ -86,8 +86,11 @@ namespace FlyingChick
             // background showing below the hill fill that appeared/vanished
             // as the zoom level changed. Basing it on the CURRENT
             // orthographicSize instead keeps it below the visible area at
-            // any zoom.
-            float bottomY = -cam.orthographicSize - fillDepth;
+            // any zoom. CameraZoom (M7 sky-bias pass) also shifts the
+            // camera's Y position upward while zoomed out, so the bottom of
+            // the view is no longer just -orthographicSize -- it's
+            // cam.position.y - orthographicSize.
+            float bottomY = cam.transform.position.y - cam.orthographicSize - fillDepth;
 
             vertexBuffer.Clear();
             colorBuffer.Clear();

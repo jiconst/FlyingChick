@@ -17,6 +17,7 @@ namespace FlyingChick
     {
         [SerializeField] private float radius = 15f;
         [SerializeField] private float startXFraction = 0.28f;
+        [SerializeField] private float skyFlightScoreRate = 0.03f; // score per world-unit traveled while a Sky Flight buff is active -- see FixedUpdate
 
         public event Action OnGreatSlideLanding;
         public event Action OnMissedLanding;
@@ -88,6 +89,13 @@ namespace FlyingChick
         // Used by speed-coin pickups (M3): reference adds +260.
         public void AddSpeedBoost(float amount) => physics.AddSpeed(amount);
 
+        // Sky Flight orb pickup (Collectibles/SkyOrbSpawner.cs): sends the
+        // bird into a real, physically-simulated soar for `duration`
+        // seconds (see BirdPhysics.StartSkyFlight) instead of just forcing
+        // the camera to zoom -- CameraZoom's existing height-based zoom then
+        // follows the bird's actual altitude naturally.
+        public void StartSkyFlight(float duration) => physics.StartSkyFlight(duration);
+
         private void FixedUpdate()
         {
             var gm = GameManager.Instance;
@@ -99,6 +107,15 @@ namespace FlyingChick
 
             physics.Step(dt, scrollXBeforeAdvance, holding);
             gm.AdvanceScroll(physics.Speed * dt);
+
+            // Sky Flight (Collectibles/SkyOrbSpawner.cs): normal scoring is
+            // entirely event-driven (landing a slide, touching a coin/cloud)
+            // and none of those happen while soaring high above everything,
+            // so the score readout would otherwise sit frozen for the whole
+            // buff. A small continuous trickle proportional to distance
+            // covered keeps it climbing the entire time instead.
+            if (physics.IsSkyFlightActive)
+                ScoreManager.Instance.AddScore(physics.Speed * dt * skyFlightScoreRate);
 
             if (physics.JustLandedGreatSlide) OnGreatSlideLanding?.Invoke();
             if (physics.JustLandedMiss) OnMissedLanding?.Invoke();
