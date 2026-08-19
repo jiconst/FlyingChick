@@ -138,11 +138,34 @@ namespace FlyingChick
         // FastAPI error responses look like {"detail": "..."} -- surface
         // that human-readable message when present (e.g. "login_id already
         // taken") instead of just UnityWebRequest's generic "HTTP/1.1 409
-        // Conflict".
+        // Conflict". 422 is special-cased to the validation-error array shape
+        // (see ValidationErrorDetail comment) -- without this, a plain
+        // "password too short" signup attempt fell through to a useless
+        // generic error instead of telling the player what was actually
+        // wrong, which read as "the server is broken" rather than "fix your
+        // input" (실제 원인: JsonUtility가 배열을 string 필드로 못 읽어서
+        // 조용히 실패 -> request.error로 폴백).
         private static string TryExtractServerErrorDetail(UnityWebRequest request)
         {
             string body = request.downloadHandler?.text;
             if (string.IsNullOrEmpty(body)) return null;
+
+            if (request.responseCode == 422)
+            {
+                try
+                {
+                    var parsed = JsonUtility.FromJson<ValidationErrorDetail>(body);
+                    if (parsed?.detail == null || parsed.detail.Length == 0) return null;
+                    var messages = new string[parsed.detail.Length];
+                    for (int i = 0; i < parsed.detail.Length; i++) messages[i] = parsed.detail[i].msg;
+                    return string.Join(" / ", messages);
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
             try
             {
                 var parsed = JsonUtility.FromJson<ErrorDetail>(body);
