@@ -189,6 +189,7 @@ namespace FlyingChick
         // 메인 메뉴로.
         private void HandleLoggedIn()
         {
+            authSubmitInFlight = false;
             authErrorText.gameObject.SetActive(false);
             if (isSignupFlow)
             {
@@ -203,6 +204,7 @@ namespace FlyingChick
 
         private void HandleAuthError(string message)
         {
+            authSubmitInFlight = false;
             authErrorText.gameObject.SetActive(true);
             authErrorText.text = message;
         }
@@ -367,6 +369,7 @@ namespace FlyingChick
         {
             audio?.PlayClick();
             isSignupFlow = signup;
+            authSubmitInFlight = false;
             authErrorText.gameObject.SetActive(false);
             authLoginIdField.text = "";
             authPasswordField.text = "";
