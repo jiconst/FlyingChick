@@ -99,7 +99,8 @@ namespace FlyingChick
             clickClip = ProceduralAudio.NoiseBurst("SFX_Click", 0.05f, 0.25f);
             dayOverClip = ProceduralAudio.Chime("SFX_DayOver", new[] { 587.3f, 493.9f, 392f }, 0.35f, 0.3f);
 
-            // Placeholder ambient bed -- see ProceduralAudio.Pad for caveats.
+            // Placeholder ambient bed, not real composed music -- but the
+            // loop itself is now seamless (see ProceduralAudio.Pad).
             bgmSource.clip = ProceduralAudio.Pad("BGM_Ambient", 220f, 329.6f, 6f, 0.5f);
         }
 

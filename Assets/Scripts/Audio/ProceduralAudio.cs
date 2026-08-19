@@ -76,22 +76,32 @@ namespace FlyingChick
             return Build(name, data);
         }
 
-        // Two-layer sine pad, faded to silence at both ends so AudioSource's
-        // hard loop point never clicks -- a placeholder ambient bed, not real
-        // composed music. Real BGM should replace this once available.
+        // Two-layer sine pad for AudioManager's looping BGM_Ambient
+        // (AudioSource.loop = true). An earlier version faded to silence at
+        // both ends to hide the click where the loop seams together --
+        // that turned into a worse problem: fading in/out every single
+        // loop (every `duration` seconds) is an audible tremolo/swell, which
+        // is exactly the periodic "웅- 웅-" hum-like pulsing players reported
+        // hearing under everything else. The actual fix isn't to hide the
+        // seam better, it's to not HAVE a seam: freq1/freq2 are snapped to
+        // the nearest frequency that completes a whole number of cycles
+        // within the clip's real length, so the waveform's value AND slope
+        // already match at the wrap-around point -- a genuinely seamless
+        // loop, no envelope needed (and the snap is inaudible: at 6s it's
+        // at most ~0.08Hz off the requested pitch).
         public static AudioClip Pad(string name, float freq1, float freq2, float duration, float volume)
         {
             int samples = Mathf.Max(1, Mathf.CeilToInt(SampleRate * duration));
+            float loopDuration = samples / (float)SampleRate;
+            float loopFreq1 = Mathf.Round(freq1 * loopDuration) / loopDuration;
+            float loopFreq2 = Mathf.Round(freq2 * loopDuration) / loopDuration;
+
             var data = new float[samples];
-            float fadeSamples = SampleRate * 0.5f;
             for (int i = 0; i < samples; i++)
             {
                 float t = (float)i / SampleRate;
-                float fadeIn = Mathf.Clamp01(i / fadeSamples);
-                float fadeOut = Mathf.Clamp01((samples - 1 - i) / fadeSamples);
-                float env = Mathf.Min(fadeIn, fadeOut);
-                float wave = Mathf.Sin(2f * Mathf.PI * freq1 * t) * 0.6f + Mathf.Sin(2f * Mathf.PI * freq2 * t) * 0.4f;
-                data[i] = wave * volume * env * 0.5f;
+                float wave = Mathf.Sin(2f * Mathf.PI * loopFreq1 * t) * 0.6f + Mathf.Sin(2f * Mathf.PI * loopFreq2 * t) * 0.4f;
+                data[i] = wave * volume * 0.5f;
             }
             return Build(name, data);
         }

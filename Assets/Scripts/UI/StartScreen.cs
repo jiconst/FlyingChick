@@ -22,7 +22,9 @@ namespace FlyingChick
     public class StartScreen : MonoBehaviour
     {
         private const int MaxDailyMissionLines = 5;
-        private const int MaxLeaderboardLines = 12;
+        // 닉네임 표시 줄(신규) 1개 추가 여유분 -- 원래 12(점수 최대 10줄 + 총
+        // 슬라이드 + 총 비행일 수)로 꽉 차 있었음.
+        private const int MaxLeaderboardLines = 13;
 
         private enum Panel { MainMenu, Settings, HowToPlay, Stats }
         private enum StatsTab { Leaderboard, Birds, Missions }
@@ -472,9 +474,14 @@ namespace FlyingChick
 
         private void BuildStatsLeaderboardTab(Transform parent)
         {
+            // 요청: "배경색 때문에 글자가 잘 안보여 볼드체로... 폰트 사이즈를
+            // 두배 정도" -- 카드 배경(반투명 크림색) 뒤로 게임 월드(하늘/언덕
+            // 색상, 낮/밤에 따라 계속 바뀜)가 비쳐서 배경 대비가 불안정했음.
+            // 폰트를 16->28로 키우고 Bold를 추가, 색도 더 짙게(0.32,0.2,0.2 ->
+            // 0.15,0.08,0.05) 낮춰서 어떤 배경에서도 잘 읽히도록 함.
             leaderboardLines = new TextMeshProUGUI[MaxLeaderboardLines];
             for (int i = 0; i < MaxLeaderboardLines; i++)
-                leaderboardLines[i] = UIFactory.CreateText(parent, $"Line{i}", 16, new Color(0.32f, 0.2f, 0.2f));
+                leaderboardLines[i] = UIFactory.CreateText(parent, $"Line{i}", 28, new Color(0.15f, 0.08f, 0.05f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
         }
 
         private void BuildStatsBirdsTab(Transform parent)
@@ -483,31 +490,33 @@ namespace FlyingChick
 
             BuildNicknameRow(parent, brown);
 
-            coinsText = UIFactory.CreateText(parent, "Coins", 18, new Color(0.85f, 0.6f, 0.1f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            coinsText = UIFactory.CreateText(parent, "Coins", 32, new Color(0.85f, 0.6f, 0.1f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
 
             eggButton = UIFactory.CreateButton(parent, "EggButton", "", 15, brown, out eggButtonText);
             eggButton.onClick.AddListener(OnEggButtonClicked);
 
-            hatchText = UIFactory.CreateText(parent, "HatchMessage", 15, new Color(1f, 0.6f, 0.15f), TextAlignmentOptions.Center, FontStyles.Bold);
+            hatchText = UIFactory.CreateText(parent, "HatchMessage", 28, new Color(1f, 0.6f, 0.15f), TextAlignmentOptions.Center, FontStyles.Bold);
             hatchText.gameObject.SetActive(false);
 
-            birdNameText = UIFactory.CreateText(parent, "BirdName", 13, brown, TextAlignmentOptions.Center);
+            birdNameText = UIFactory.CreateText(parent, "BirdName", 24, brown, TextAlignmentOptions.Center, FontStyles.Bold);
 
             BuildBirdRow(parent);
         }
 
         private void BuildStatsMissionsTab(Transform parent)
         {
-            dailyHeaderText = UIFactory.CreateText(parent, "DailyHeader", 16, new Color(0.42f, 0.29f, 0.12f), TextAlignmentOptions.Center, FontStyles.Bold);
+            dailyHeaderText = UIFactory.CreateText(parent, "DailyHeader", 30, new Color(0.42f, 0.29f, 0.12f), TextAlignmentOptions.Center, FontStyles.Bold);
 
             dailyLines = new TextMeshProUGUI[MaxDailyMissionLines];
             for (int i = 0; i < MaxDailyMissionLines; i++)
-                dailyLines[i] = UIFactory.CreateText(parent, $"DailyLine{i}", 14, new Color(0.32f, 0.2f, 0.2f));
+                dailyLines[i] = UIFactory.CreateText(parent, $"DailyLine{i}", 26, new Color(0.15f, 0.08f, 0.05f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
         }
 
         private void BuildNicknameRow(Transform parent, Color brown)
         {
-            nicknameField = UIFactory.CreateInputField(parent, "NicknameField", 15, brown, 16);
+            nicknameField = UIFactory.CreateInputField(parent, "NicknameField", 28, brown, 16);
+            // UIFactory.CreateInputField엔 Bold 옵션이 없어서 생성 후 직접 설정.
+            nicknameField.textComponent.fontStyle = FontStyles.Bold;
             nicknameField.text = profile != null ? profile.Nickname : "";
             nicknameField.onEndEdit.AddListener(value =>
             {
@@ -738,28 +747,32 @@ namespace FlyingChick
 
         private void ReflowStatsLeaderboardTab(float cx)
         {
+            // 폰트가 16->28로 커진 만큼 줄 간격/박스도 같이 키움(26->40, 400x24->520x36).
             float y = 120f;
             for (int i = 0; i < MaxLeaderboardLines; i++)
             {
-                UIFactory.SetTopLeftCentered((RectTransform)leaderboardLines[i].transform, cx - 200f, y, 400f, 24f);
-                y += 26f;
+                UIFactory.SetTopLeftCentered((RectTransform)leaderboardLines[i].transform, cx - 260f, y, 520f, 36f);
+                y += 40f;
             }
         }
 
         private void ReflowStatsBirdsTab(float cx)
         {
-            UIFactory.SetTopLeft((RectTransform)nicknameField.transform, cx - 220f, 120f, 180f, 32f);
-            UIFactory.SetTopLeft((RectTransform)rerollButton.transform, cx - 32f, 120f, 64f, 32f);
-            UIFactory.SetTopLeft((RectTransform)coinsText.transform, cx + 60f, 124f, 160f, 28f);
+            // 닉네임/코인 텍스트가 커진 만큼(15/18->28/32) 아래 요소들도 전부
+            // 세로로 밀림 -- eggButton 176->190, hatchText 220->244, 새 아이콘
+            // 줄 260->292, birdNameText도 그만큼 따라 내려감.
+            UIFactory.SetTopLeft((RectTransform)nicknameField.transform, cx - 220f, 120f, 180f, 46f);
+            UIFactory.SetTopLeft((RectTransform)rerollButton.transform, cx - 32f, 120f, 64f, 46f);
+            UIFactory.SetTopLeft((RectTransform)coinsText.transform, cx + 60f, 128f, 220f, 40f);
 
-            UIFactory.SetTopLeftCentered((RectTransform)eggButton.transform, cx - 100f, 176f, 200f, 40f);
-            UIFactory.SetTopLeftCentered((RectTransform)hatchText.transform, cx - 200f, 220f, 400f, 22f);
+            UIFactory.SetTopLeftCentered((RectTransform)eggButton.transform, cx - 100f, 190f, 200f, 40f);
+            UIFactory.SetTopLeftCentered((RectTransform)hatchText.transform, cx - 220f, 244f, 440f, 34f);
 
             var birds = BirdPool.All;
             const float iconSize = 50f, spacing = 12f;
             float totalW = birds.Length * iconSize + (birds.Length - 1) * spacing;
             float startX = cx - totalW * 0.5f;
-            const float y = 260f;
+            const float y = 292f;
 
             for (int i = 0; i < birds.Length; i++)
             {
@@ -767,17 +780,18 @@ namespace FlyingChick
                 UIFactory.SetTopLeft(birdIconRects[i], x, y, iconSize, iconSize);
                 UIFactory.SetTopLeft((RectTransform)birdSelectionBorders[i].transform, x - 3f, y - 3f, iconSize + 6f, iconSize + 6f);
             }
-            UIFactory.SetTopLeftCentered((RectTransform)birdNameText.transform, cx - 300f, y + iconSize + 16f, 600f, 20f);
+            UIFactory.SetTopLeftCentered((RectTransform)birdNameText.transform, cx - 300f, y + iconSize + 20f, 600f, 30f);
         }
 
         private void ReflowStatsMissionsTab(float cx)
         {
-            UIFactory.SetTopLeftCentered((RectTransform)dailyHeaderText.transform, cx - 200f, 120f, 400f, 24f);
-            float y = 154f;
+            // 폰트가 16/14->30/26으로 커진 만큼 간격도 같이 키움(154->170, 26->42).
+            UIFactory.SetTopLeftCentered((RectTransform)dailyHeaderText.transform, cx - 200f, 120f, 400f, 38f);
+            float y = 170f;
             for (int i = 0; i < MaxDailyMissionLines; i++)
             {
-                UIFactory.SetTopLeftCentered((RectTransform)dailyLines[i].transform, cx - 260f, y, 520f, 22f);
-                y += 26f;
+                UIFactory.SetTopLeftCentered((RectTransform)dailyLines[i].transform, cx - 300f, y, 600f, 34f);
+                y += 42f;
             }
         }
 
@@ -932,7 +946,7 @@ namespace FlyingChick
 
                 dailyLines[i].gameObject.SetActive(true);
                 bool done = dailyMissions.Completed[i];
-                dailyLines[i].color = done ? new Color(0.25f, 0.55f, 0.2f) : new Color(0.32f, 0.2f, 0.2f);
+                dailyLines[i].color = done ? new Color(0.15f, 0.45f, 0.1f) : new Color(0.15f, 0.08f, 0.05f);
                 string mark = done ? "O" : $"{dailyMissions.Progress[i]}/{missions[i].Target}";
                 dailyLines[i].text = $"{missions[i].Description} ({mark})";
             }
@@ -942,12 +956,28 @@ namespace FlyingChick
         {
             if (leaderboard == null) return;
 
-            var scores = leaderboard.TopScores;
+            var defaultColor = new Color(0.15f, 0.08f, 0.05f);
+            var nicknameColor = new Color(0.75f, 0.45f, 0.05f);
             int line = 0;
 
+            // 요청: "기록에 DB 기록 후 닉네임이 있으면 같이 표시" -- 로그인
+            // 상태(서버 계정 닉네임 존재)면 기록 목록 맨 위에 닉네임을 눈에 띄는
+            // 색으로 표시. 오프라인/비로그인이면 조용히 생략(로컬 기록만 있음,
+            // 온라인 점수 제출/랭킹 자체는 이번 요청 범위 밖 -- Phase C 그대로
+            // 미구현).
+            if (auth != null && !string.IsNullOrEmpty(auth.ServerNickname))
+            {
+                leaderboardLines[line].gameObject.SetActive(true);
+                leaderboardLines[line].color = nicknameColor;
+                leaderboardLines[line].text = $"★ {auth.ServerNickname}";
+                line++;
+            }
+
+            var scores = leaderboard.TopScores;
             if (scores.Count == 0)
             {
                 leaderboardLines[line].gameObject.SetActive(true);
+                leaderboardLines[line].color = defaultColor;
                 leaderboardLines[line].text = Localization.Get("leaderboard.empty");
                 line++;
             }
@@ -956,6 +986,7 @@ namespace FlyingChick
                 for (int i = 0; i < scores.Count && line < MaxLeaderboardLines; i++, line++)
                 {
                     leaderboardLines[line].gameObject.SetActive(true);
+                    leaderboardLines[line].color = defaultColor;
                     leaderboardLines[line].text = $"{i + 1}.  {scores[i]:N0}";
                 }
             }
@@ -963,12 +994,14 @@ namespace FlyingChick
             if (line < MaxLeaderboardLines)
             {
                 leaderboardLines[line].gameObject.SetActive(true);
+                leaderboardLines[line].color = defaultColor;
                 leaderboardLines[line].text = string.Format(Localization.Get("leaderboard.totalSlides"), leaderboard.TotalSlidesAllTime);
                 line++;
             }
             if (line < MaxLeaderboardLines)
             {
                 leaderboardLines[line].gameObject.SetActive(true);
+                leaderboardLines[line].color = defaultColor;
                 leaderboardLines[line].text = string.Format(Localization.Get("leaderboard.totalRuns"), leaderboard.TotalRuns);
                 line++;
             }
