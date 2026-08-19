@@ -36,6 +36,8 @@ namespace FlyingChick
         // Positive when airborne above the terrain directly below the bird;
         // 0 (or negative mid-collision-snap) when grounded. Drives CameraZoom.
         public float HeightAboveGround { get; private set; }
+        // Cumulative seconds spent Airborne this run -- HUD's "airtime:" readout.
+        public float TotalAirborneTime { get; private set; }
 
         private BirdPhysics physics;
         private Camera cam;
@@ -76,6 +78,7 @@ namespace FlyingChick
 
             physics = new BirdPhysics(canvasStartX, radius, gm.Ground);
             physics.Reset(gm.ScrollX);
+            TotalAirborneTime = 0f;
 
             if (collection != null && collection.SelectedBird.Perk == PerkType.StartSpeedBonus)
                 physics.AddSpeed(collection.SelectedBird.PerkValue);
@@ -107,6 +110,8 @@ namespace FlyingChick
 
             physics.Step(dt, scrollXBeforeAdvance, holding);
             gm.AdvanceScroll(physics.Speed * dt);
+
+            if (physics.Airborne) TotalAirborneTime += dt;
 
             // Sky Flight (Collectibles/SkyOrbSpawner.cs): normal scoring is
             // entirely event-driven (landing a slide, touching a coin/cloud)

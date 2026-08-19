@@ -47,10 +47,30 @@ namespace FlyingChick
             public string Error; // server's {"detail": "..."} message when available, else a network-level error
         }
 
+        // FastAPI's error body shape depends on WHERE the error came from:
+        // our own `raise HTTPException(status_code=..., detail="...")` calls
+        // (401/409) send a plain string, but Pydantic's automatic request
+        // validation (422 -- e.g. password too short) sends a LIST of
+        // {"msg": "...", ...} objects instead. JsonUtility can't deserialize
+        // one field as "sometimes a string, sometimes an array", so these
+        // are two separate DTOs -- TryExtractServerErrorDetail picks which
+        // one to try based on the status code.
         [Serializable]
         private class ErrorDetail
         {
             public string detail;
+        }
+
+        [Serializable]
+        private class ValidationErrorItem
+        {
+            public string msg;
+        }
+
+        [Serializable]
+        private class ValidationErrorDetail
+        {
+            public ValidationErrorItem[] detail;
         }
 
         public void Get<T>(string path, Action<ApiResult<T>> callback)

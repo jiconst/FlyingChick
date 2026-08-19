@@ -25,6 +25,9 @@ namespace FlyingChick
         [SerializeField] private float flightDuration = 5.5f; // "5,6초 동안 날으는 느낌" 피드백 -- BirdPhysics.StartSkyFlight's arc length
 
         public event Action<Vector3, string, Color> OnPickupPopup;
+        // Clean domain event (no visual payload) for HUD's pickup-count box --
+        // same pattern as CoinSpawner's OnCoinCollected/OnSpeedCoinCollected.
+        public event Action OnOrbCollected;
 
         private static readonly Color OrbColor = new Color(0.3f, 0.9f, 0.45f);
 
@@ -112,6 +115,7 @@ namespace FlyingChick
                 bird.StartSkyFlight(flightDuration);
                 burst.Burst(worldPos, OrbColor, 14);
                 OnPickupPopup?.Invoke(worldPos, Localization.Get("skyorb.popup"), OrbColor);
+                OnOrbCollected?.Invoke();
             }
         }
 

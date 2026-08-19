@@ -727,8 +727,112 @@ M7에서 우선순위 낮다고 스킵했던 두 항목 — `flying-chick.html`�
      같이 키움(`UpdateDayClock`)
   - `Island X · Nx` 텍스트(`midText`)는 이번 요청 대상이 아니라 우측 상단
     자리에 그대로 둠
+  3. **후속 수정**: 점수 폰트/패널이 커지면서(56→70 높이) 바로 아래 있던
+     Nest 목표 미션 박스(`nestPanelRect`, `UpdateNestPanel`)가 점수 패널과
+     겹치게 됨("거리 측정 값 밑의 사각 박스가 좀더 아래로 내려와야해" 피드백) —
+     시작 Y를 `66` → `86`으로 내려서 점수 패널 아래로 여유 있게 뺌
+  4. **Score와 별개의 "지나온 거리" 신설** ("좌측 상단이 스코어, 화면 중앙이
+     지나온 거리로 변경해줘" 피드백) — Score(좌측 상단, 슬라이드/픽업/섬 보너스
+     기반 게임 점수)와는 다른 개념으로, 화면 상단 가로 중앙에 `distanceText`를
+     새로 추가해 `GameManager.ScrollX`(월드 스크롤 거리, Localization 없이 그냥
+     `"{0:N0}m"` 형식으로 표시)를 보여줌. `TextAlignmentOptions.Top`으로 상자
+     안에서 가로 중앙 정렬되게 하고, 그 상자 자체를 매 프레임
+     `(Screen.width - 260) * 0.5f`로 화면 중앙에 재배치. 폰트 30 — Score(52)보다
+     작고 `Island` 텍스트(18)보다 큼, 상단 3분할 레이아웃(좌: Score / 중앙:
+     지나온 거리 / 우: Island·배수, 해/밤 바)의 가운데 자리
 - `GameBootstrapper`에 `SkyOrbSpawner` 생성 + `HUD.BindSkyOrb`로 픽업 팝업 연결 (다른
   스포너들과 동일한 배선 패턴)
+
+### 섬(스테이지) 진행 바 (`Core/GameManager.cs`, `UI/HUD.cs`) — "다음 판까지 얼마나
+가야 하는지 알 수가 없다" 피드백, 2026-08-19
+- `GameManager`는 다음 섬까지 남은 거리(`islandDistance`)와 섬 하나의 길이
+  (`IslandLength=2600`, private const)를 이미 내부적으로 추적하고 있었는데 밖으로
+  드러내는 값이 없었음 — 플레이어 입장에선 우측 상단 "Island N · Mx" 텍스트가 섬이
+  바뀔 때 갑자기 툭 바뀌기만 할 뿐, 다음 섬까지 얼마나 남았는지 알 방법이 없었음
+- **고침**: `GameManager.IslandProgress`(0~1, `islandDistance / IslandLength`) 프로퍼티를
+  새로 노출하고, `HUD.cs`에 `Island N · Mx` 텍스트 바로 아래 작은 진행 바
+  (`islandProgressTrackRect`/`islandProgressFill`)를 추가 — 해/밤 바와 똑같은
+  트랙+필 패턴이지만 헷갈리지 않게 초록 계열 색으로 구분. 매 프레임
+  `islandTrackW * Mathf.Clamp01(gameManager.IslandProgress)`로 채움 폭 갱신,
+  섬이 바뀌는 순간(`islandDistance -= IslandLength`) 자동으로 0으로 리셋되고 다시
+  차오르는 것도 별도 처리 없이 그대로 따라옴(매 프레임 실제 값을 다시 읽어오는
+  방식이라 리셋 이벤트를 따로 구독할 필요가 없음)
+
+### HUD 2차 재배치 + 픽업 카운트 박스 (`UI/HUD.cs`, `Core/GameManager.cs`,
+`Player/BirdController.cs`, `Collectibles/SkyOrbSpawner.cs`) — 2026-08-20
+
+사용자가 다른 게임의 참고 스크린샷(SCORE/LEVEL 박스 + 진행 바 + 픽업 아이콘 박스가
+상단에, DIST/AIRTIME이 하단에 있는 레이아웃)을 보여주며 방향을 구체화함. 색상/폰트
+같은 디테일까지 똑같이 맞추진 않고(이 프로젝트의 플랫 스타일 유지), **레이아웃
+구조**(라벨+숫자 세로 배치, 하단 좌우 텍스트, 우측 상단 아이콘+개수 박스)만 참고함.
+
+- **SCORE 라벨 추가**: 좌측 상단 박스가 숫자만 있었는데, "SCORE"라는 글자 아래 숫자가
+  오도록 `scoreLabelText`(16pt, 정적 텍스트라 `BuildUI`에서 한 번만 설정)를 숫자
+  위에 추가. 그만큼 `ScorePanel` 높이를 70 → 96으로 키움 → **연쇄 수정**: 해/밤
+  바(`UpdateDayClock`의 `trackY`, 패널 세로 중앙 기준 재계산: 36→49)와 Nest 목표
+  박스(`UpdateNestPanel`의 y, 86→116)를 또 한 번 아래로 밀어야 했음(폰트/패널
+  키울 때마다 아래 요소들이 줄줄이 밀리는 패턴 — 이 HUD는 위에서부터 절대좌표로
+  쌓는 구조라 상단 요소 크기가 바뀌면 항상 아래 전부를 다시 계산해야 함)
+- **거리 표시 위치 변경 + 형식 변경**: 화면 상단 중앙 → **하단 중앙**으로 이동
+  (`TextAlignmentOptions.Top` → `Bottom`, y는 `Screen.height - distanceH - 16f`로
+  하단 고정). 내용도 `"1,234m"` → `"DIST: 1234.00M   AIRTIME: 12.34S"`로
+  변경 — 정수+단위 대신 소수점 2자리(참고 스크린샷 형식)로, 그리고 "그 옆에
+  airtime" 요청대로 체공시간을 같은 줄에 이어붙임
+- **누적 체공시간(airtime) 신설**: 기존엔 없던 값 — `BirdController`에
+  `TotalAirborneTime`(초, 런당 누적) 추가. `FixedUpdate`에서
+  `if (physics.Airborne) TotalAirborneTime += dt;`로 매 프레임 누적, `ResetForNewRun`
+  에서 0으로 리셋. 착지/이륙 여부와 무관하게 그냥 "공중에 떠 있던 시간의 총합"이라
+  Sky Flight 비행 시간도 자연스럽게 포함됨
+- **우측 상단 픽업 개수 박스 신설**: 골드 코인/파란 스피드 코인/초록 Sky Flight
+  오브를 각각 몇 개 먹었는지 원 아이콘(각 픽업과 같은 색, `ProceduralSprite.
+  CreateCircle`) + 숫자로 한 박스 안에 가로로 나열(`BuildPickupCountsPanel`,
+  처음엔 섬 진행 바 바로 아래 y=64였다가, 아래 "레벨업 기준" 기능으로 남은 거리
+  텍스트가 그 사이에 추가되면서 y=76으로 다시 밀림). 카운트 자체는 순수 HUD 로컬 상태
+  (`goldPickupCount`/`bluePickupCount`/`greenPickupCount`) — 기존
+  `CoinSpawner.OnCoinCollected`/`OnSpeedCoinCollected`("clean domain event" 패턴,
+  DailyMissions 등이 이미 쓰던 것과 동일)를 그대로 구독해서 증가시킴. 초록 오브
+  쪽은 그런 이벤트가 없어서 `SkyOrbSpawner.OnOrbCollected`를 새로 추가(같은 패턴).
+  세 카운트 전부 `GameManager.OnRunStart` 구독으로 런 시작 시 0으로 리셋 — HUD가
+  `OnRunStart`를 구독하는 첫 사례라 `Bind()`/`OnDestroy()`에 구독/해제를 새로 추가함
+
+### 레벨업(섬 전환) 기준 노출 + 남은 거리 + 도달 기록 (`Core/GameManager.cs`,
+`UI/HUD.cs`) — "해가 지기 전에 목표 위치 도달, 남은 거리 표시, 도착하면 기록,
+다음 스테이지 다시 진행, 레벨업 기준 추가" 요청, 2026-08-20
+
+- **먼저 확인한 것**: "Island"가 이미 사실상 이 게임의 "스테이지/레벨"임 —
+  `GameManager.AdvanceScroll`이 이동 거리(`islandDistance`)가
+  `IslandLength`(2600 월드 유닛)를 넘을 때마다 `Island++`, `OnIslandAdvanced` 발생,
+  배수(`Multiplier`)도 같이 올라감. 즉 "다음 스테이지가 다시 진행"되는 것 자체는
+  **이미 자동으로 일어나고 있었음**(`islandDistance -= IslandLength`로 다음 목표
+  카운트다운이 곧바로 다시 시작됨) — 새로 만들 필요가 없었던 부분
+- **DayCycle(90초 낮 타이머)은 건드리지 않음** — "해가 지기 전에 도달"이라는
+  표현 때문에 처음엔 "섬에 도달하면 낮 타이머를 리셋해서 스테이지마다 새 낮을
+  준다"는 방향도 고려했지만, 계산해보니 섬 하나(2600유닛)는 최저 속도(초당
+  300유닛)로도 약 8.7초면 도달함 — 90초 낮 안에 이미 10개 안팎의 섬을 자연스럽게
+  통과하는 구조라, 섬 통과마다 낮을 리셋하면 사실상 낮이 절대 안 끝나서(항상
+  8~9초 안에 리셋됨) 이 게임의 핵심 페이싱("90초 뒤 Day Over")이 사실상
+  무력화됨. **그래서 낮 타이머 로직은 그대로 두고, "해가 지기 전에"는 기존
+  90초 낮 자체가 이미 주는 압박으로 해석** — 낮이 끝나면 그때까지의 진행과
+  무관하게 지금처럼 Day Over(실패)가 됨. 이 해석이 맞는지는 사용자 확인 필요할
+  수 있음 — 만약 "섬마다 낮이 다시 시작"되는 걸 원한 거라면 완전히 다른(더 큰)
+  변경이 필요함
+- **신규 1 — 남은 거리 표시**: `GameManager.IslandRemainingDistance`
+  (`IslandLength - islandDistance`) 프로퍼티 추가. 이 값이 정확히 0이 되는
+  순간이 `AdvanceScroll`에서 `Island++`가 일어나는 바로 그 조건이라, **이 숫자
+  자체가 곧 "레벨업 기준"** — 별도 설명 없이 눈에 보이는 숫자로 기준을 드러냄.
+  `HUD.cs`에 섬 진행 바 바로 아래 `islandRemainingText`로 "500m to Island 4"
+  형식으로 표시
+- **신규 2 — 도달 기록(토스트)**: 예전엔 `Island`가 올라가도 텍스트가 조용히
+  바뀔 뿐 아무 알림이 없었음 — `HUD`가 `GameManager.OnIslandAdvanced`를 새로
+  구독해서 "ISLAND {n} REACHED! LEVEL UP" 토스트를 띄움(기존 Great
+  Slide/Fever/Streak 토스트와 같은 재사용 가능한 토스트 시스템, 새 텍스트 스타일만
+  추가). 이게 "도착하면 기록"에 해당 — 영구 저장까지는 아니고(그런 요청은
+  아니었음, 저장하려면 `Leaderboard`/`SaveData`에 "최고 도달 섬" 같은 필드를
+  추가해야 함 — 지금은 안 함), 그 순간을 화면에 남기는 정도
+- **레벨업 기준 요약**: 이동 거리(`GameManager.ScrollX`)가 2600 월드 유닛
+  쌓일 때마다 1레벨(Island) 상승, 그때마다 `Multiplier`가 +2. 별도 스킬/판정
+  요소 없이 순수 이동 거리 기반 — 다이빙/Great Slide로 속도를 올리면 더 빨리
+  다음 레벨에 도달함
 
 ### 줌 도입하면서 같이 고친 것 — 화면 가장자리 빈 공간 버그
 - `TerrainGenerator`/`CoinSpawner`/`CloudSpawner`는 전부 "기준 줌(orthographicSize =
@@ -933,6 +1037,16 @@ STATS 하위 탭으로 통합 · 설정 진입 시 로그인/회원가입 선택
      `isSignupFlow`에 따라 "로그인"/"회원가입"으로 바뀜. 회원가입이면 `AuthService.Signup`
      호출(서버가 고유 닉네임 자동 발급 + 로그인까지 한 번에 됨) 후 4번으로, 로그인이면
      `AuthService.Login` 성공 시 바로 메인 메뉴로 복귀
+     - **키보드 폼 흐름 추가**("아이디 입력 후 탭을 누르면 암호 창으로, 엔터를 누르면
+       제출 버튼이 클릭되면 좋겠다" 피드백, 2026-08-19): 아이디 필드에 포커스가 있는
+       상태에서 탭을 누르면 암호 필드로 포커스 이동(`Select()` + `ActivateInputField()`) —
+       uGUI/TMP_InputField는 탭 키로 다음 필드 이동을 기본 지원 안 해서 `Update()`에서
+       `Keyboard.current.tabKey.wasPressedThisFrame`을 직접 폴링해서 구현(New Input
+       System 기반, 이 프로젝트의 `InputService` 컨벤션과 동일). 암호 필드에서 엔터를
+       누르면 제출 버튼 클릭과 동일하게 동작(`TMP_InputField.onSubmit` — 포커스를
+       잃어서가 아니라 엔터로 편집이 끝났을 때만 불리는 이벤트라 `onEndEdit`과 다름).
+       버튼 클릭 핸들러와 필드 제출 핸들러가 로직 중복 없이 같은 `SubmitAuthCredentials()`
+       메서드를 공유
   4. **회원가입 닉네임 확인**(회원가입일 때만 거침): 3번에서 이미 로그인된 상태 —
      서버가 자동 발급한 닉네임을 입력 필드에 보여주고 직접 수정 가능(`SetNickname`) +
      "재생성"(`RerollNickname`) 버튼, "완료" 누르면 메인 메뉴로. **서버 엔드포인트를 새로
@@ -1100,6 +1214,9 @@ STATS 하위 탭으로 통합 · 설정 진입 시 로그인/회원가입 선택
       성공하면 바로 메인 메뉴로 돌아오는지, 실패(틀린 비밀번호 등) 시 에러 메시지가 뜨는지
       (메인 메뉴 재구성)
 - [ ] 게임 방법 화면 텍스트가 한/영 전환 시 같이 바뀌는지 (메인 메뉴 재구성)
+- [ ] 아이디+비밀번호 폼에서 아이디 필드에 포커스가 있을 때 탭을 누르면 암호 필드로
+      포커스가 넘어가는지, 암호 필드에서 엔터를 누르면 로그인/회원가입 버튼을 누른
+      것과 동일하게 제출되는지 (아이디/비밀번호 키보드 흐름)
 - [ ] 평범한 언덕 점프/짧은 발사에서는 카메라 줌아웃이 거의/전혀 안 걸리다가, 정말 높이
       뜨는 발사에서만 줌아웃이 시작되는지 — `HUD` 디버그 텍스트의 `zoom` 값으로 확인
       (줌 시작 임계값 `zoomStartFraction`)
@@ -1120,6 +1237,21 @@ STATS 하위 탭으로 통합 · 설정 진입 시 로그인/회원가입 선택
       멈춰 보이지 않는지), 좌상단 점수 폰트가 이전보다 확실히 커졌는지, 해/밤
       진행 바(태양 아이콘 포함)가 화면 우측 상단이 아니라 점수 숫자 바로 오른쪽에
       더 큰 크기로 붙어서 자연스럽게 움직이는지 (Sky Flight HUD 개선)
+- [ ] Nest 목표 박스가 점수 패널과 안 겹치는지, 화면 상단 가로 중앙에 "N,NNNm"
+      형식의 지나온 거리 숫자가 새로 보이는지(Score와 별개로 계속 올라가는지),
+      화면 폭을 바꿔도 항상 정중앙에 위치하는지 (지나온 거리 신설)
+- [ ] 우측 상단 "Island N · Mx" 텍스트 바로 아래 초록색 진행 바가 보이는지, 플레이할수록
+      채워지다가 섬이 바뀌는 순간 0으로 리셋되고 다시 차오르는지 (섬 진행 바 신설)
+- [ ] 좌측 상단 박스에 "SCORE" 글자 아래 점수 숫자가 표시되는지, 그 아래 Nest 목표
+      박스가 겹치지 않는지, 옆의 해/밤 바 위치도 자연스러운지, 화면 하단 중앙에
+      "DIST: ...M   AIRTIME: ...S"가 표시되고 실제로 날 때 airtime이 올라가는지,
+      우측 상단(섬 진행 바 아래)에 골드/파랑/초록 원 아이콘 + 개수 박스가 보이고
+      각 픽업을 먹을 때마다 해당 숫자만 올라가는지, 새 런 시작 시 셋 다 0으로
+      리셋되는지 (HUD 2차 재배치)
+- [ ] 섬 진행 바 아래 "Nm to Island N+1" 텍스트가 실제 이동 거리에 맞춰 줄어드는지,
+      섬에 도달하는 순간 "ISLAND N REACHED! LEVEL UP" 토스트가 뜨는지, 그 직후
+      다음 섬을 향한 남은 거리 카운트다운이 자연스럽게 다시 시작되는지 (레벨업
+      기준 노출)
 
 ## 실행 방법
 
@@ -1218,3 +1350,17 @@ STATS 하위 탭으로 통합 · 설정 진입 시 로그인/회원가입 선택
    `statsMissionsGroup`)를 이걸로 교체해 해결. 개별 요소(버튼 하나 등)처럼 스스로
    `SetTopLeft`로 크기까지 지정하는 자식은 이 문제와 무관하므로 그대로 `CreateChild`
    사용.
+8. **"FlyingChick-Server와 연결이 안 된다(cannot connect)" 오진단 주의**: 실제로는
+   버그가 아니라 타이밍 문제였던 사례(2026-08-19) — `docker ps`로는 컨테이너가
+   실행 중으로 보이지만, `docker logs --timestamps flyingchick-server-api-1`로
+   보면 재시작 직후였음(맥이 잠들었다 깨거나 Docker Desktop을 다시 켠 직후 등).
+   `api` 컨테이너는 시작할 때 `alembic upgrade head`가 DB 준비를 기다리며 몇 초간
+   재시도하는 구간이 있고(Dockerfile 참고), **이 구간엔 uvicorn 자체가 아직 안 떠서
+   포트 8000이 정말로 아무것도 안 듣고 있음** — 이 짧은 창에 Unity가 요청을 보내면
+   `UnityWebRequest`가 진짜 "Cannot connect to destination host"를 받음(서버
+   로직/네트워킹 코드 문제 아님). **확인 방법**: `docker ps`(Up 시간이 몇 분 이내면
+   의심), `docker logs --timestamps flyingchick-server-api-1 | grep "Uvicorn
+   running"`(최근 재시작 시각 확인), `curl http://localhost:8000/health` (200 OK면
+   지금은 정상). 재시작 직후가 아니라면 `./manage.sh status`/`./manage.sh logs`로
+   실제 에러를 봐야 함 — "cannot connect"라고 곧바로 클라이언트 코드부터 의심하지
+   말 것.

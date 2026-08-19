@@ -1,5 +1,6 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace FlyingChick
@@ -378,19 +379,26 @@ namespace FlyingChick
             authPasswordLabelText = UIFactory.CreateText(parent, "PasswordLabel", 14, white);
             authPasswordField = UIFactory.CreateInputField(parent, "PasswordField", 15, dark, 128, password: true);
 
+            // 엔터 = 회원가입/로그인 버튼 클릭. TMP_InputField.onSubmit은
+            // onEndEdit과 달리 포커스를 잃어서가 아니라 엔터/리턴을 눌러서
+            // 편집이 끝났을 때만 불림.
+            authPasswordField.onSubmit.AddListener(_ => SubmitAuthCredentials());
+
             authErrorText = UIFactory.CreateText(parent, "ErrorText", 13, new Color(0.7f, 0.15f, 0.15f), TextAlignmentOptions.Center);
             authErrorText.gameObject.SetActive(false);
 
             authSubmitButton = UIFactory.CreateButton(parent, "AuthSubmitButton", "", 16, brown, out authSubmitButtonText);
-            authSubmitButton.onClick.AddListener(() =>
-            {
-                audio?.PlayClick();
-                if (isSignupFlow) auth?.Signup(authLoginIdField.text, authPasswordField.text);
-                else auth?.Login(authLoginIdField.text, authPasswordField.text);
-            });
+            authSubmitButton.onClick.AddListener(SubmitAuthCredentials);
 
             authCredentialsBackButton = UIFactory.CreateButton(parent, "AuthCredentialsBack", "", 15, brown, out authCredentialsBackButtonText);
             authCredentialsBackButton.onClick.AddListener(() => { audio?.PlayClick(); SwitchSettingsView(SettingsView.AuthChoice); });
+        }
+
+        private void SubmitAuthCredentials()
+        {
+            audio?.PlayClick();
+            if (isSignupFlow) auth?.Signup(authLoginIdField.text, authPasswordField.text);
+            else auth?.Login(authLoginIdField.text, authPasswordField.text);
         }
 
         private void BuildSettingsSignupNickname(Transform parent)
@@ -579,6 +587,16 @@ namespace FlyingChick
             }
 
             RefreshContent();
+
+            // 아이디 입력 필드에서 탭 -> 암호 필드로 포커스 이동. uGUI/TMP_InputField는
+            // 기본적으로 탭 키로 다음 필드 이동을 지원하지 않아서 직접 구현해야 함
+            // (Move 액션은 보통 방향키/게임패드용이라 탭이 안 걸림).
+            if (authLoginIdField != null && authLoginIdField.isFocused
+                && Keyboard.current != null && Keyboard.current.tabKey.wasPressedThisFrame)
+            {
+                authPasswordField.Select();
+                authPasswordField.ActivateInputField();
+            }
 
             bool typing = (nicknameField != null && nicknameField.isFocused)
                 || (authLoginIdField != null && authLoginIdField.isFocused)

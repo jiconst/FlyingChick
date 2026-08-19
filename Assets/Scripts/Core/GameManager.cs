@@ -31,6 +31,13 @@ namespace FlyingChick
         public int NestBonus { get; set; }
         public int Multiplier => 10 + NestBonus + (Island - 1) * 2;
         public GameState State { get; private set; } = GameState.Start;
+        // 0~1, 다음 섬까지 얼마나 남았는지 -- HUD의 섬 진행 바("다음 판까지 얼마나
+        // 가야 하는지 알 수가 없다" 피드백으로 신설)가 읽음.
+        public float IslandProgress => islandDistance / IslandLength;
+        // 다음 섬(스테이지)까지 남은 실제 거리(월드 유닛) -- "레벨업 기준"을
+        // 눈에 보이는 숫자로 드러냄: 이 값이 0이 되는 순간(AdvanceScroll에서
+        // Island가 올라가는 바로 그 조건) 레벨업. HUD의 "남은 거리" 표시가 읽음.
+        public float IslandRemainingDistance => IslandLength - islandDistance;
 
         // Single shared terrain instance -- TerrainGenerator and BirdPhysics
         // both query this so the rendered hill and the physics ground line
