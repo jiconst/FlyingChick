@@ -40,6 +40,12 @@ namespace FlyingChick
         private StatsTab currentStatsTab = StatsTab.Leaderboard;
         private SettingsView currentSettingsView = SettingsView.Preferences;
         private bool isSignupFlow;
+        // 서버 응답 오는 동안 중복 제출 방지 -- 실제로 로그에서 관찰된 문제:
+        // 422(비밀번호가 너무 짧음 등) 에러 메시지가 예전엔 제대로 안 보여서
+        // 사용자가 짧은 시간에 엔터를 여러 번 눌러 같은 요청이 반복 전송됨.
+        // 에러 메시지 자체는 ApiClient.cs에서 고쳤지만, 응답 오기 전 중복
+        // 제출을 막는 게 근본적으로 더 안전함.
+        private bool authSubmitInFlight;
 
         private string hatchMessage;
         private float hatchMessageTimeLeft;
@@ -396,6 +402,9 @@ namespace FlyingChick
 
         private void SubmitAuthCredentials()
         {
+            if (authSubmitInFlight) return; // 응답 오기 전 중복 제출(엔터 연타 등) 방지
+            authSubmitInFlight = true;
+
             audio?.PlayClick();
             if (isSignupFlow) auth?.Signup(authLoginIdField.text, authPasswordField.text);
             else auth?.Login(authLoginIdField.text, authPasswordField.text);
