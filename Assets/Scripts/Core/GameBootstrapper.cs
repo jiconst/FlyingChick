@@ -207,6 +207,7 @@ namespace FlyingChick
             hud.BindSkyOrb(skyOrbSpawner);
             hud.BindDayCycle(dayCycle);
             hud.BindMeta(nest);
+            hud.BindIdentity(profile, auth);
 
             var startScreen = gameObject.AddComponent<StartScreen>();
             startScreen.Bind(wallet, dailyMissions, collection, leaderboard, audio, profile, auth);

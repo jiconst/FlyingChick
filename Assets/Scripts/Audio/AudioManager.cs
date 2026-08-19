@@ -99,9 +99,15 @@ namespace FlyingChick
             clickClip = ProceduralAudio.NoiseBurst("SFX_Click", 0.05f, 0.25f);
             dayOverClip = ProceduralAudio.Chime("SFX_DayOver", new[] { 587.3f, 493.9f, 392f }, 0.35f, 0.3f);
 
-            // Placeholder ambient bed, not real composed music -- but the
-            // loop itself is now seamless (see ProceduralAudio.Pad).
-            bgmSource.clip = ProceduralAudio.Pad("BGM_Ambient", 220f, 329.6f, 6f, 0.5f);
+            // Placeholder ambient bed, not real composed music. The loop
+            // seam itself is fixed (see ProceduralAudio.Pad), but two
+            // sustained low sine tones (220/330Hz, near the register of an
+            // actual appliance/AC hum) still read as a "웅-" drone by their
+            // very nature -- feedback that it's "still humming" after the
+            // seam fix was really about this, not the seam. Moved up an
+            // octave (440/659.3Hz) and turned down (0.5 -> 0.35) so it sits
+            // further from that hum register instead of on top of it.
+            bgmSource.clip = ProceduralAudio.Pad("BGM_Ambient", 440f, 659.3f, 6f, 0.35f);
         }
 
         public void Configure(BirdController birdRef, SlideJudge slideJudgeRef, FeverSystem feverRef, CoinSpawner coinSpawnerRef, CloudSpawner cloudSpawnerRef, GameManager gameManagerRef, DayCycle dayCycleRef)

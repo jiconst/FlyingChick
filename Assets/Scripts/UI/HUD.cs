@@ -58,6 +58,8 @@ namespace FlyingChick
         private CloudSpawner cloudSpawner;
         private SkyOrbSpawner skyOrbSpawner;
         private NestMultiplier nest;
+        private PlayerProfile profile;
+        private AuthService auth;
 
         private readonly List<Toast> toasts = new List<Toast>();
         private readonly List<PositionedToast> pickupToasts = new List<PositionedToast>();
@@ -65,10 +67,17 @@ namespace FlyingChick
         private GameObject root;
 
         private RectTransform scorePanelRect;
+        private TextMeshProUGUI nicknameText;
         private TextMeshProUGUI scoreLabelText;
         private TextMeshProUGUI scoreText;
-        private TextMeshProUGUI midText;
-        private RectTransform midRect;
+
+        // "레벨 값" 요청 -- 기존엔 우측 상단에 "Island N · Mx" 한 줄짜리
+        // 텍스트만 있었음. Score 박스와 짝을 이루도록 라벨+큰 숫자+배수를
+        // 세로로 쌓은 전용 박스로 승격.
+        private RectTransform levelPanelRect;
+        private TextMeshProUGUI levelLabelText;
+        private TextMeshProUGUI levelText;
+        private TextMeshProUGUI levelMultText;
 
         // 우측 상단 픽업 개수 박스 -- 골드 코인/스피드(파랑) 코인/Sky Flight(초록)
         // 오브 각각 몇 개 먹었는지. 런 시작 시 0으로 리셋(HandleRunStart).
@@ -80,8 +89,8 @@ namespace FlyingChick
         private int bluePickupCount;
         private int greenPickupCount;
 
-        // "다음 섬까지 얼마나 남았는지 알 수가 없다" 피드백으로 신설 -- Island
-        // 텍스트(midText) 바로 아래, GameManager.IslandProgress(0~1)를 채움으로
+        // "다음 섬까지 얼마나 남았는지 알 수가 없다" 피드백으로 신설 -- LEVEL
+        // 박스(levelText) 바로 아래, GameManager.IslandProgress(0~1)를 채움으로
         // 보여주는 진행 바. 해/밤 바(dayTrackFill)와 같은 트랙+필 패턴.
         private RectTransform islandProgressTrackRect;
         private Image islandProgressFill;
@@ -138,6 +147,21 @@ namespace FlyingChick
 
         public void BindDayCycle(DayCycle dayCycleRef) => dayCycle = dayCycleRef;
         public void BindMeta(NestMultiplier nestRef) => nest = nestRef;
+
+        // "나의 레벨 값과 닉네임 표시도 같이 추가해줬으면" 요청 -- 로그인
+        // 상태면 서버 닉네임, 아니면 로컬 PlayerProfile 닉네임을 씀(StartScreen의
+        // 기록 탭에서 이미 쓰던 것과 같은 우선순위).
+        public void BindIdentity(PlayerProfile profileRef, AuthService authRef)
+        {
+            profile = profileRef;
+            auth = authRef;
+        }
+
+        private string DisplayNickname()
+        {
+            if (auth != null && !string.IsNullOrEmpty(auth.ServerNickname)) return auth.ServerNickname;
+            return profile != null ? profile.Nickname : "";
+        }
 
         public void BindCollectibles(CoinSpawner coinSpawnerRef, CloudSpawner cloudSpawnerRef, Camera camera)
         {
@@ -231,21 +255,33 @@ namespace FlyingChick
 
             var brown = new Color(0.42f, 0.29f, 0.12f);
 
+            // 요청: "게임 플레이 화면 내 텍스트와 박스를 좀더 키워주고" -- 이전
+            // 패스(96 높이)에서 한 단계 더 키움(150), "닉네임 표시도 같이"
+            // 요청으로 라벨 위에 닉네임 한 줄을 더 얹음.
             var scorePanel = UIFactory.CreatePanel(t, "ScorePanel", new Color(0f, 0f, 0f, 0.4f));
             scorePanelRect = (RectTransform)scorePanel.transform;
-            UIFactory.SetTopLeft(scorePanelRect, 12, 8, 300, 96);
+            UIFactory.SetTopLeft(scorePanelRect, 12, 8, 340, 150);
 
-            // 요청: "SCORE 라는 문자 아래 숫자가 표시" -- 라벨 + 숫자를 세로로 쌓음.
-            // 패널도 그만큼 더 키움(70 -> 96).
-            scoreLabelText = UIFactory.CreateText(t, "ScoreLabel", 16, new Color(1f, 0.85f, 0.55f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            UIFactory.SetTopLeft((RectTransform)scoreLabelText.transform, 24, 8, 200, 22);
+            nicknameText = UIFactory.CreateText(t, "Nickname", 20, new Color(1f, 0.9f, 0.65f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            UIFactory.SetTopLeft((RectTransform)nicknameText.transform, 24, 8, 300, 26);
+
+            scoreLabelText = UIFactory.CreateText(t, "ScoreLabel", 18, new Color(1f, 0.85f, 0.55f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            UIFactory.SetTopLeft((RectTransform)scoreLabelText.transform, 24, 36, 200, 24);
             scoreLabelText.text = "SCORE"; // 정적 텍스트라 매 프레임 다시 설정할 필요 없음
 
-            scoreText = UIFactory.CreateText(t, "Score", 52, new Color(1f, 0.95f, 0.75f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            UIFactory.SetTopLeft((RectTransform)scoreText.transform, 24, 28, 340, 64);
+            scoreText = UIFactory.CreateText(t, "Score", 60, new Color(1f, 0.95f, 0.75f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            UIFactory.SetTopLeft((RectTransform)scoreText.transform, 24, 62, 360, 78);
 
-            midText = UIFactory.CreateText(t, "IslandMult", 18, brown);
-            midRect = (RectTransform)midText.transform;
+            // "레벨 값" 요청 -- Score 박스와 짝을 이루는 우측 상단 LEVEL 박스로
+            // 승격(이전엔 "Island N · Mx" 한 줄짜리 평문 텍스트였음).
+            var levelPanel = UIFactory.CreatePanel(t, "LevelPanel", new Color(0f, 0f, 0f, 0.4f));
+            levelPanelRect = (RectTransform)levelPanel.transform;
+
+            levelLabelText = UIFactory.CreateText(t, "LevelLabel", 18, new Color(1f, 0.85f, 0.55f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            levelLabelText.text = "LEVEL";
+
+            levelText = UIFactory.CreateText(t, "LevelValue", 56, new Color(1f, 0.95f, 0.75f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            levelMultText = UIFactory.CreateText(t, "LevelMult", 20, new Color(1f, 0.85f, 0.55f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
 
             // "다음 섬(스테이지)까지 얼마나 남았는지 알 수가 없다" 피드백 -- Island
             // 텍스트 바로 아래에 진행 바. 해/밤 바(주황~보라 계열)와 헷갈리지 않게
@@ -262,15 +298,17 @@ namespace FlyingChick
             islandFillRect.sizeDelta = Vector2.zero;
 
             // 요청: "남은 거리 표시" -- 진행 바 아래 숫자로도 보여줌(레벨업 기준을
-            // 눈에 보이는 값으로).
-            islandRemainingText = UIFactory.CreateText(t, "IslandRemaining", 13, brown, TextAlignmentOptions.TopLeft);
+            // 눈에 보이는 값으로). brown은 카드 배경 없이 게임 월드 위에 바로
+            // 뜨는 텍스트라 배경에 묻히기 쉬워서, 다른 HUD 텍스트와 같은 밝은
+            // 크림색 + Bold로 바꿈(가독성 요청 반영).
+            islandRemainingText = UIFactory.CreateText(t, "IslandRemaining", 18, new Color(1f, 0.95f, 0.75f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
 
             // 요청: "거리 표시는 화면 중앙 하단에" + "dist: 뒤에 표시, 그 옆에
             // airtime:" -- 화면 하단 가로 중앙에 "DIST: ...  AIRTIME: ..."를 한
             // 줄로 표시. TextAlignmentOptions.Bottom이 상자 안에서 가로 중앙 +
             // 세로 하단 정렬해주므로, 상자 자체를 화면 하단 중앙에 두면 됨
             // (Update에서 Screen.width/height 기준으로 매 프레임 재배치).
-            distanceText = UIFactory.CreateText(t, "Distance", 26, new Color(1f, 0.95f, 0.75f), TextAlignmentOptions.Bottom, FontStyles.Bold);
+            distanceText = UIFactory.CreateText(t, "Distance", 34, new Color(1f, 0.95f, 0.75f), TextAlignmentOptions.Bottom, FontStyles.Bold);
             distanceRect = (RectTransform)distanceText.transform;
 
             BuildDayClock(t);
@@ -290,24 +328,25 @@ namespace FlyingChick
             var panel = UIFactory.CreatePanel(parent, "PickupCountsPanel", new Color(0f, 0f, 0f, 0.35f));
             pickupCountsPanelRect = (RectTransform)panel.transform;
 
-            var goldSprite = ProceduralSprite.CreateCircle(20, new Color(1f, 0.82f, 0.25f));
-            var blueSprite = ProceduralSprite.CreateCircle(20, new Color(0.25f, 0.65f, 1f));
-            var greenSprite = ProceduralSprite.CreateCircle(20, new Color(0.3f, 0.9f, 0.45f));
+            // 요청: "텍스트와 박스를 좀더 키워주고" -- 아이콘 20->28, 폰트 16->22.
+            var goldSprite = ProceduralSprite.CreateCircle(28, new Color(1f, 0.82f, 0.25f));
+            var blueSprite = ProceduralSprite.CreateCircle(28, new Color(0.25f, 0.65f, 1f));
+            var greenSprite = ProceduralSprite.CreateCircle(28, new Color(0.3f, 0.9f, 0.45f));
 
             var goldIcon = UIFactory.CreateImage(panel.transform, "GoldIcon", goldSprite);
-            UIFactory.SetTopLeft((RectTransform)goldIcon.transform, 10f, 13f, 20f, 20f);
-            goldCountText = UIFactory.CreateText(panel.transform, "GoldCount", 16, Color.white, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            UIFactory.SetTopLeft((RectTransform)goldCountText.transform, 34f, 10f, 34f, 26f);
+            UIFactory.SetTopLeft((RectTransform)goldIcon.transform, 12f, 16f, 28f, 28f);
+            goldCountText = UIFactory.CreateText(panel.transform, "GoldCount", 22, Color.white, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            UIFactory.SetTopLeft((RectTransform)goldCountText.transform, 44f, 14f, 44f, 32f);
 
             var blueIcon = UIFactory.CreateImage(panel.transform, "BlueIcon", blueSprite);
-            UIFactory.SetTopLeft((RectTransform)blueIcon.transform, 76f, 13f, 20f, 20f);
-            blueCountText = UIFactory.CreateText(panel.transform, "BlueCount", 16, Color.white, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            UIFactory.SetTopLeft((RectTransform)blueCountText.transform, 100f, 10f, 34f, 26f);
+            UIFactory.SetTopLeft((RectTransform)blueIcon.transform, 102f, 16f, 28f, 28f);
+            blueCountText = UIFactory.CreateText(panel.transform, "BlueCount", 22, Color.white, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            UIFactory.SetTopLeft((RectTransform)blueCountText.transform, 134f, 14f, 44f, 32f);
 
             var greenIcon = UIFactory.CreateImage(panel.transform, "GreenIcon", greenSprite);
-            UIFactory.SetTopLeft((RectTransform)greenIcon.transform, 142f, 13f, 20f, 20f);
-            greenCountText = UIFactory.CreateText(panel.transform, "GreenCount", 16, Color.white, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            UIFactory.SetTopLeft((RectTransform)greenCountText.transform, 166f, 10f, 34f, 26f);
+            UIFactory.SetTopLeft((RectTransform)greenIcon.transform, 192f, 16f, 28f, 28f);
+            greenCountText = UIFactory.CreateText(panel.transform, "GreenCount", 22, Color.white, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            UIFactory.SetTopLeft((RectTransform)greenCountText.transform, 224f, 14f, 44f, 32f);
         }
 
         private void BuildDayClock(Transform parent)
@@ -427,26 +466,39 @@ namespace FlyingChick
             if (!playing) return;
 
             scoreText.text = score.Score.ToString("N0");
+            nicknameText.text = DisplayNickname();
 
-            // 요청: 화면 하단 중앙에 "DIST: ...  AIRTIME: ..." 한 줄로.
+            // 요청: 화면 하단 중앙에 "DIST: ...  AIRTIME: ..." 한 줄로. 폰트가
+            // 26->34로 커진 만큼 상자도 같이 키움.
             distanceText.text = $"DIST: {gameManager.ScrollX:0.00}M   AIRTIME: {bird.TotalAirborneTime:0.00}S";
-            const float distanceW = 480f, distanceH = 40f;
+            const float distanceW = 620f, distanceH = 50f;
             UIFactory.SetTopLeft(distanceRect, (Screen.width - distanceW) * 0.5f, Screen.height - distanceH - 16f, distanceW, distanceH);
 
-            midText.text = $"Island {gameManager.Island} · {gameManager.Multiplier}x";
-            UIFactory.SetTopLeft(midRect, Screen.width - 220, 14, 200, 30);
+            // "레벨 값" 요청 -- Score 박스와 짝을 이루는 LEVEL 박스. 그 아래
+            // (섬 진행 바/남은 거리/픽업 개수 박스)는 전부 이 박스의 x/폭 기준으로
+            // 세로로 줄줄이 이어짐 -- 박스 하나 커지면 전부 다시 계산해야 하는
+            // 이 화면의 고질적인 패턴(이전 HUD 작업들과 동일).
+            const float levelPanelW = 180f, levelPanelH = 150f;
+            float levelX = Screen.width - levelPanelW - 20f;
+            UIFactory.SetTopLeft(levelPanelRect, levelX, 8f, levelPanelW, levelPanelH);
+            UIFactory.SetTopLeft((RectTransform)levelLabelText.transform, levelX + 16f, 16f, 140f, 24f);
+            levelText.text = gameManager.Island.ToString("N0");
+            UIFactory.SetTopLeft((RectTransform)levelText.transform, levelX + 16f, 44f, 140f, 68f);
+            levelMultText.text = $"{gameManager.Multiplier}x";
+            UIFactory.SetTopLeft((RectTransform)levelMultText.transform, levelX + 16f, 114f, 140f, 26f);
 
-            const float islandTrackW = 200f, islandTrackH = 8f;
-            UIFactory.SetTopLeft(islandProgressTrackRect, Screen.width - 220, 44, islandTrackW, islandTrackH);
+            const float islandTrackH = 10f;
+            UIFactory.SetTopLeft(islandProgressTrackRect, levelX, 168f, levelPanelW, islandTrackH);
             ((RectTransform)islandProgressFill.transform).sizeDelta =
-                new Vector2(islandTrackW * Mathf.Clamp01(gameManager.IslandProgress), 0f);
+                new Vector2(levelPanelW * Mathf.Clamp01(gameManager.IslandProgress), 0f);
 
             islandRemainingText.text = $"{Mathf.Max(0f, gameManager.IslandRemainingDistance):0}m to Island {gameManager.Island + 1}";
-            UIFactory.SetTopLeft((RectTransform)islandRemainingText.transform, Screen.width - 220, 54, islandTrackW, 18);
+            UIFactory.SetTopLeft((RectTransform)islandRemainingText.transform, levelX, 184f, levelPanelW, 24f);
 
-            // 요청: "골드/파랑/초록 몇 개 먹었는지 박스 안에" -- 남은 거리 표시
-            // 아래로 한 줄 더 밀림(64 -> 76).
-            UIFactory.SetTopLeft(pickupCountsPanelRect, Screen.width - 220, 76, 210f, 46f);
+            // 요청: "골드/파랑/초록 몇 개 먹었는지 박스 안에" -- LEVEL 박스와
+            // 오른쪽 끝을 맞춰서 정렬.
+            const float pickupPanelW = 280f, pickupPanelH = 60f;
+            UIFactory.SetTopLeft(pickupCountsPanelRect, levelX + levelPanelW - pickupPanelW, 216f, pickupPanelW, pickupPanelH);
             goldCountText.text = goldPickupCount.ToString("N0");
             blueCountText.text = bluePickupCount.ToString("N0");
             greenCountText.text = greenPickupCount.ToString("N0");
@@ -485,18 +537,18 @@ namespace FlyingChick
 
         private void UpdateDayClock()
         {
-            // 요청: 우측 상단에 있던 걸 이동한 거리(Score) 수치 옆으로, 커진
-            // 폰트 크기에 맞춰 바도 같이 키움 (100x10 -> 135x14, 태양 24 -> 32).
-            // 스코어 패널이 (12, 8, 300, 96) -- SCORE 라벨 추가로 다시 커져서
-            // (70->96) trackY도 패널 세로 중앙(8+96/2=56)에 맞춰 재조정.
-            const float trackX = 340f, trackY = 49f, trackW = 135f, trackH = 14f;
+            // 요청: "텍스트와 박스를 좀더 키워주고" -- 스코어 패널이 닉네임
+            // 줄 추가로 (12, 8, 340, 150)까지 커져서, 그 오른쪽 여백/trackY도
+            // 다시 맞춤(패널 세로 중앙 8+150/2=83, trackH=18 -> trackY=74).
+            // 바 자체도 135x14 -> 160x18, 태양 32 -> 38로 같이 키움.
+            const float trackX = 372f, trackY = 74f, trackW = 160f, trackH = 18f;
             UIFactory.SetTopLeft(dayTrackRect, trackX, trackY, trackW, trackH);
 
             float t = dayCycle.DayTime;
             ((RectTransform)dayTrackFill.transform).sizeDelta = new Vector2(trackW * t, 0f);
             dayTrackFill.color = Color.Lerp(new Color(1f, 0.6f, 0.15f), new Color(0.55f, 0.3f, 0.85f), t);
 
-            const float sunSize = 32f;
+            const float sunSize = 38f;
             float sunX = trackX + trackW * t - sunSize * 0.5f;
             float sunY = trackY + trackH * 0.5f - sunSize * 0.5f;
             UIFactory.SetTopLeft(sunIconRect, sunX, sunY, sunSize, sunSize);
@@ -528,9 +580,9 @@ namespace FlyingChick
             nestPanelBg.gameObject.SetActive(true);
             const float panelW = 230f;
             float panelH = 22f + missions.Length * 20f;
-            // 점수 패널이 SCORE 라벨 추가로 (8, 96) -> 아래쪽 끝이 y=104로 다시
-            // 커짐 -- 그 아래로 여유 있게 내림(86 -> 116).
-            UIFactory.SetTopLeft(nestPanelRect, 20f, 116f, panelW, panelH);
+            // 점수 패널이 닉네임 줄 추가로 (8, 150) -> 아래쪽 끝이 y=158로 다시
+            // 커짐 -- 그 아래로 여유 있게 내림(116 -> 168).
+            UIFactory.SetTopLeft(nestPanelRect, 20f, 168f, panelW, panelH);
 
             nestHeaderText.text = string.Format(Localization.Get("hud.nestHeader"), nest.Bonus);
 
