@@ -75,6 +75,7 @@ namespace FlyingChick
             ["start.nicknameReroll"] = ("재생성", "Reroll"),
             ["leaderboard.header"] = ("기록", "Leaderboard"),
             ["leaderboard.empty"] = ("아직 기록이 없어요", "No records yet"),
+            ["leaderboard.loading"] = ("불러오는 중...", "Loading..."),
             ["leaderboard.totalSlides"] = ("총 슬라이드: {0:N0}", "Total slides: {0:N0}"),
             ["leaderboard.totalRuns"] = ("총 비행일 수: {0:N0}", "Total days flown: {0:N0}"),
             ["leaderboard.close"] = ("닫기", "Close"),

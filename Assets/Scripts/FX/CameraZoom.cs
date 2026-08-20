@@ -37,7 +37,8 @@ namespace FlyingChick
         [SerializeField, Range(0f, 1f)] private float zoomStartFraction = 0.85f; // bird height (as a fraction of baseOrthoSize) below which the camera stays flat at baseline -- feedback: zoom-out was triggering on nearly every hop, not just real high-altitude flight; raising this gate makes it kick in only once the bird is close to what used to be the view's own edge
         [SerializeField] private float maxOrthoSizeMultiplier = 4f; // safety ceiling, not a normal-gameplay limit -- also comfortably covers Sky Flight's peak height (~3x baseOrthoSize with the current tuning), see BirdPhysics.SkyFlightGravity
         [SerializeField, Range(0f, 1f)] private float skyBias = 0.7f; // fraction of the extra zoomed-out space that goes upward (sky) instead of symmetrically above+below (see LateUpdate comment) -- feedback: symmetric zoom read as "unnatural", hills should shrink and sky should open up like actually flying higher
-        [SerializeField] private float zoomOutSmoothTime = 0.12f; // fast enough to keep up with a launch
+        [SerializeField] private float zoomOutSmoothTime = 0.12f; // 일반 발사 시 줌아웃 반응 속도
+        [SerializeField] private float zoomOutSmoothTimeSkyFlight = 0.03f; // Sky Flight 오브 버프 중: 초기 급등하는 속도에 즉각 따라가도록 훨씬 빠르게
         [SerializeField] private float zoomInSmoothTime = 0.35f; // slower/gentler when returning to baseline
 
         private Camera cam;
@@ -69,7 +70,9 @@ namespace FlyingChick
             float neededHalfHeight = excess <= 0f ? baseOrthoSize : baseOrthoSize + excess * heightMultiplier + margin;
             float targetSize = Mathf.Min(neededHalfHeight, baseOrthoSize * maxOrthoSizeMultiplier);
 
-            float smoothTime = targetSize > cam.orthographicSize ? zoomOutSmoothTime : zoomInSmoothTime;
+            float smoothTime = targetSize > cam.orthographicSize
+                ? (bird.IsSkyFlightActive ? zoomOutSmoothTimeSkyFlight : zoomOutSmoothTime)
+                : zoomInSmoothTime;
             cam.orthographicSize = Mathf.SmoothDamp(cam.orthographicSize, targetSize, ref velocity, smoothTime);
 
             // A purely symmetric zoom-out (camera Y fixed at 0) splits every

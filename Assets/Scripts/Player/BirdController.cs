@@ -38,6 +38,8 @@ namespace FlyingChick
         public float HeightAboveGround { get; private set; }
         // Cumulative seconds spent Airborne this run -- HUD's "airtime:" readout.
         public float TotalAirborneTime { get; private set; }
+        // Sky Flight 오브 버프 활성 여부 -- CameraZoom이 빠른 줌아웃 전환에 사용.
+        public bool IsSkyFlightActive => physics.IsSkyFlightActive;
 
         private BirdPhysics physics;
         private Camera cam;

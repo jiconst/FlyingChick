@@ -13,7 +13,7 @@ namespace FlyingChick
     public class AudioManager : MonoBehaviour
     {
         [SerializeField, Range(0f, 1f)] private float sfxVolume = 0.6f;
-        [SerializeField, Range(0f, 1f)] private float bgmVolume = 0.16f;
+        [SerializeField, Range(0f, 1f)] private float bgmVolume = 0.10f;
         [SerializeField] private int sfxSourceCount = 6;
 
         private AudioSource[] sfxSources;
@@ -110,15 +110,9 @@ namespace FlyingChick
             skyFlightChirpClip = ProceduralAudio.Chime("SFX_SkyFlightChirp", new[] { 2200f, 1800f, 2400f, 2000f }, 0.07f, 0.4f);
             skyFlightWhooshClip = ProceduralAudio.Sweep("SFX_SkyFlightWhoosh", 250f, 1100f, 1.0f, 0.3f);
 
-            // Placeholder ambient bed, not real composed music. The loop
-            // seam itself is fixed (see ProceduralAudio.Pad), but two
-            // sustained low sine tones (220/330Hz, near the register of an
-            // actual appliance/AC hum) still read as a "웅-" drone by their
-            // very nature -- feedback that it's "still humming" after the
-            // seam fix was really about this, not the seam. Moved up an
-            // octave (440/659.3Hz) and turned down (0.5 -> 0.35) so it sits
-            // further from that hum register instead of on top of it.
-            bgmSource.clip = ProceduralAudio.Pad("BGM_Ambient", 440f, 659.3f, 6f, 0.35f);
+            // 3레이어 절차적 BGM: 코드 패드 + 베이스 펄스 + 멜로디.
+            // ProceduralAudio.GameBGM 참고 (C장조 펜타토닉, 120BPM, 8초 루프).
+            bgmSource.clip = ProceduralAudio.GameBGM("BGM_Main");
         }
 
         public void Configure(BirdController birdRef, SlideJudge slideJudgeRef, FeverSystem feverRef, CoinSpawner coinSpawnerRef, CloudSpawner cloudSpawnerRef, SkyOrbSpawner skyOrbSpawnerRef, GameManager gameManagerRef, DayCycle dayCycleRef)

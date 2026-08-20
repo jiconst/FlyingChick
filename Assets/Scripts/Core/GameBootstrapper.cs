@@ -174,6 +174,7 @@ namespace FlyingChick
             var walletGO = new GameObject("CoinWallet");
             var wallet = walletGO.AddComponent<CoinWallet>();
             wallet.Configure(gm, score);
+            wallet.BindAuth(auth);
 
             var nestGO = new GameObject("NestMultiplier");
             var nest = nestGO.AddComponent<NestMultiplier>();
@@ -214,10 +215,12 @@ namespace FlyingChick
             hud.BindDayCycle(dayCycle);
             hud.BindMeta(nest);
             hud.BindIdentity(profile, auth);
+            hud.BindLevel(playerLevel);
 
             var startScreen = gameObject.AddComponent<StartScreen>();
             startScreen.Bind(wallet, dailyMissions, collection, leaderboard, audio, profile, auth);
             startScreen.BindLevel(playerLevel);
+            startScreen.BindRanking(ranking);
 
             var dayOverScreen = gameObject.AddComponent<DayOverScreen>();
             dayOverScreen.Bind(score, slideJudge, cloudSpawner, fever, gm, wallet, nest, audio, auth);

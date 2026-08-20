@@ -37,5 +37,12 @@ namespace FlyingChick
         {
             api.Get($"/rankings/me?period={period}", callback);
         }
+
+        // 이 유저 본인의 개인 최고 기록 Top-N -- 기록(Stats > 리더보드) 탭에서
+        // 로그인 유저에게 서버 점수를 보여줄 때 사용(StartScreen.RefreshLeaderboard).
+        public void GetMyScores(int limit, Action<ApiClient.ApiResult<UserScoresResponse>> callback)
+        {
+            api.Get($"/scores/me?limit={limit}", callback);
+        }
     }
 }

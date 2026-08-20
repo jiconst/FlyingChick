@@ -60,6 +60,7 @@ namespace FlyingChick
         private NestMultiplier nest;
         private PlayerProfile profile;
         private AuthService auth;
+        private PlayerLevel playerLevel;
 
         private readonly List<Toast> toasts = new List<Toast>();
         private readonly List<PositionedToast> pickupToasts = new List<PositionedToast>();
@@ -151,6 +152,10 @@ namespace FlyingChick
         // "나의 레벨 값과 닉네임 표시도 같이 추가해줬으면" 요청 -- 로그인
         // 상태면 서버 닉네임, 아니면 로컬 PlayerProfile 닉네임을 씀(StartScreen의
         // 기록 탭에서 이미 쓰던 것과 같은 우선순위).
+        // "레벨업은 누적 기록의 합산" -- HUD LEVEL 박스가 런마다 리셋되는 Island가
+        // 아니라 평생 누적 거리 기반 PlayerLevel을 보여주도록 연결.
+        public void BindLevel(PlayerLevel playerLevelRef) => playerLevel = playerLevelRef;
+
         public void BindIdentity(PlayerProfile profileRef, AuthService authRef)
         {
             profile = profileRef;
@@ -482,7 +487,9 @@ namespace FlyingChick
             float levelX = Screen.width - levelPanelW - 20f;
             UIFactory.SetTopLeft(levelPanelRect, levelX, 8f, levelPanelW, levelPanelH);
             UIFactory.SetTopLeft((RectTransform)levelLabelText.transform, levelX + 16f, 16f, 140f, 24f);
-            levelText.text = gameManager.Island.ToString("N0");
+            // PlayerLevel.Level = 누적 이동 거리 기반 계정 레벨(런 종료 후 저장됨).
+            // gameManager.Island는 Multiplier 서브텍스트와 진행 바에서 계속 사용.
+            levelText.text = playerLevel != null ? playerLevel.Level.ToString() : gameManager.Island.ToString();
             UIFactory.SetTopLeft((RectTransform)levelText.transform, levelX + 16f, 44f, 140f, 68f);
             levelMultText.text = $"{gameManager.Multiplier}x";
             UIFactory.SetTopLeft((RectTransform)levelMultText.transform, levelX + 16f, 114f, 140f, 26f);

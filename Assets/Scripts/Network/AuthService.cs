@@ -29,6 +29,9 @@ namespace FlyingChick
         // 성공 시 서버가 알려주는 값을 그대로 반영. 기본 1은 로그아웃
         // 상태거나 아직 서버에서 값을 못 받아온 상태의 안전한 초기값.
         public int ServerLevel { get; private set; } = 1;
+        // 서버에 저장된 코인 총액 -- 로그인/me 검증 시 서버가 알려주는 값.
+        // CoinWallet이 로그인 시 max(로컬, 서버)를 취해 권위 있는 값으로 삼음.
+        public int ServerCoins { get; private set; }
         // 서버 집계 누적치 -- 로그인/me 검증 시 서버가 알려주는 값.
         // POST /scores 응답에는 포함되지 않으므로 클라이언트가 런 종료 시
         // 로컬 Leaderboard로부터 임시로 더해두고, 다음 로그인에 서버 값이
@@ -41,7 +44,8 @@ namespace FlyingChick
         public event Action OnLoggedOut;
         public event Action<string> OnAuthError; // human-readable message
         public event Action OnNicknameChanged; // ServerNickname 값이 바뀔 때마다(로그인/회원가입 포함) — PlayerProfile.OnNicknameChanged와 같은 패턴
-        public event Action OnLevelChanged; // ServerLevel 값이 바뀔 때마다(로그인/검증/동기화 포함)
+        public event Action OnLevelChanged;     // ServerLevel 값이 바뀔 때마다(로그인/검증/동기화 포함)
+        public event Action OnCoinsChanged;     // ServerCoins 값이 바뀔 때마다
 
         public void Configure(ApiClient apiClient)
         {
@@ -73,6 +77,7 @@ namespace FlyingChick
                 {
                     ServerNickname = result.Data.nickname;
                     ServerLevel = result.Data.user_level;
+                    ServerCoins = result.Data.coins;
                     ServerTotalSlides = result.Data.total_slides;
                     ServerTotalRuns = result.Data.total_runs;
                     IsLoggedIn = true;
@@ -94,10 +99,26 @@ namespace FlyingChick
             IsLoggedIn = false;
             ServerNickname = null;
             ServerLevel = 1;
+            ServerCoins = 0;
             ServerTotalSlides = 0;
             ServerTotalRuns = 0;
             Persist(null);
             OnLoggedOut?.Invoke();
+        }
+
+        // 코인 동기화 -- CoinWallet이 로그인 상태일 때 모든 코인 변경(획득/지출)
+        // 직후 호출함. 실패해도 무시(다음 로그인 시 서버 값이 덮어씀).
+        // 비로그인 상태면 아무 일도 안 함(로그인 optional 원칙).
+        public void SyncCoins(int currentCoins)
+        {
+            if (!IsLoggedIn) return;
+            api.Put<CoinResponse>("/auth/coins", new CoinSyncRequest { coins = currentCoins }, result =>
+            {
+                if (!result.Success) return;
+                if (result.Data.coins == ServerCoins) return;
+                ServerCoins = result.Data.coins;
+                OnCoinsChanged?.Invoke();
+            });
         }
 
         // "총 이동한 거리값을 가지고 레벨업" 요청 -- 클라이언트는 레벨을 직접
@@ -161,6 +182,7 @@ namespace FlyingChick
             api.AuthToken = result.Data.access_token;
             ServerNickname = result.Data.nickname;
             ServerLevel = result.Data.user_level;
+            ServerCoins = result.Data.coins;
             ServerTotalSlides = result.Data.total_slides;
             ServerTotalRuns = result.Data.total_runs;
             IsLoggedIn = true;

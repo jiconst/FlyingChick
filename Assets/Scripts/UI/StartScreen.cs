@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -37,7 +38,13 @@ namespace FlyingChick
         private AudioManager audio;
         private PlayerProfile profile;
         private AuthService auth;
+        private RankingService ranking;
         private PlayerLevel playerLevel;
+
+        // 로그인 유저의 서버 기록. null = 아직 미조회(또는 비로그인).
+        // [] = 조회 완료했지만 기록 없음. 조회 중 중복 요청 방지 플래그도 함께.
+        private int[] serverScores;
+        private bool serverScoresFetchInFlight;
 
         private Panel currentPanel = Panel.MainMenu;
         private StatsTab currentStatsTab = StatsTab.Leaderboard;
@@ -160,10 +167,14 @@ namespace FlyingChick
             if (auth != null)
             {
                 auth.OnLoggedIn += HandleLoggedIn;
+                auth.OnLoggedOut += HandleLoggedOut;
                 auth.OnAuthError += HandleAuthError;
                 auth.OnNicknameChanged += HandleAuthNicknameChanged;
             }
         }
+
+        // 서버 기록 조회용 -- GameBootstrapper가 Bind 이후 호출(선택적, null이면 미연동).
+        public void BindRanking(RankingService rankingRef) => ranking = rankingRef;
 
         // "총 이동한 거리값을 가지고 레벨업" 요청 -- 기록(Leaderboard) 탭
         // 닉네임 줄 옆에 표시(RefreshLeaderboard). 별도 이벤트 구독 없이
@@ -177,6 +188,7 @@ namespace FlyingChick
             if (auth != null)
             {
                 auth.OnLoggedIn -= HandleLoggedIn;
+                auth.OnLoggedOut -= HandleLoggedOut;
                 auth.OnAuthError -= HandleAuthError;
                 auth.OnNicknameChanged -= HandleAuthNicknameChanged;
             }
@@ -208,6 +220,14 @@ namespace FlyingChick
             {
                 SwitchTo(Panel.MainMenu);
             }
+        }
+
+        // 로그아웃 시 서버 점수 캐시를 비워서 다음 번 기록 탭 열 때
+        // 로컬 기록을 보여주고(재조회 없이), 재로그인 시 다시 조회하도록 함.
+        private void HandleLoggedOut()
+        {
+            serverScores = null;
+            serverScoresFetchInFlight = false;
         }
 
         private void HandleAuthError(string message)
@@ -275,6 +295,30 @@ namespace FlyingChick
             statsLeaderboardGroup.SetActive(tab == StatsTab.Leaderboard);
             statsBirdsGroup.SetActive(tab == StatsTab.Birds);
             statsMissionsGroup.SetActive(tab == StatsTab.Missions);
+
+            // 리더보드 탭 전환 시 로그인 유저면 서버 기록 새로 조회.
+            // 이미 조회 중이거나 비로그인이면 건너뜀.
+            if (tab == StatsTab.Leaderboard && ranking != null
+                && auth != null && auth.IsLoggedIn && !serverScoresFetchInFlight)
+                FetchServerScores();
+        }
+
+        private void FetchServerScores()
+        {
+            serverScoresFetchInFlight = true;
+            ranking.GetMyScores(10, result =>
+            {
+                serverScoresFetchInFlight = false;
+                if (!result.Success || result.Data?.scores == null)
+                {
+                    // 조회 실패 시 로컬 기록 그대로 사용(serverScores 건드리지 않음)
+                    return;
+                }
+                var entries = result.Data.scores;
+                serverScores = new int[entries.Length];
+                for (int i = 0; i < entries.Length; i++)
+                    serverScores[i] = entries[i].score;
+            });
         }
 
         private void BuildMainMenu(Transform parent)
@@ -967,24 +1011,36 @@ namespace FlyingChick
             int line = 0;
 
             bool loggedIn = auth != null && !string.IsNullOrEmpty(auth.ServerNickname);
-            // 점수 줄마다 닉네임 표시 -- 로그인이면 서버 닉네임, 비로그인이면 "-"
-            string nick = loggedIn ? auth.ServerNickname : "-";
 
-            var scores = leaderboard.TopScores;
-            if (scores.Count == 0)
+            // 닉네임: 서버 닉네임 우선, 없으면 로컬 닉네임.
+            string playerNick = loggedIn ? auth.ServerNickname
+                : (profile != null ? profile.Nickname : "-");
+
+            // 점수 소스: 로그인 유저는 serverScores(DB), 비로그인은 로컬 TopScores.
+            // serverScores가 아직 조회 중이면(null) 로컬 기록을 임시로 보여줌.
+            IReadOnlyList<int> localScores = leaderboard.TopScores;
+            bool usingServerScores = loggedIn && serverScores != null;
+            // 배열을 IReadOnlyList로 직접 사용할 수 없어서 아래에서 인덱서로 접근
+            int scoreCount = usingServerScores ? serverScores.Length : localScores.Count;
+            System.Func<int, int> getScore = usingServerScores
+                ? (i => serverScores[i])
+                : (i => localScores[i]);
+            if (scoreCount == 0)
             {
                 leaderboardLines[line].gameObject.SetActive(true);
                 leaderboardLines[line].color = defaultColor;
-                leaderboardLines[line].text = Localization.Get("leaderboard.empty");
+                leaderboardLines[line].text = (loggedIn && serverScores == null && serverScoresFetchInFlight)
+                    ? Localization.Get("leaderboard.loading")
+                    : Localization.Get("leaderboard.empty");
                 line++;
             }
             else
             {
-                for (int i = 0; i < scores.Count && line < MaxLeaderboardLines; i++, line++)
+                for (int i = 0; i < scoreCount && line < MaxLeaderboardLines; i++, line++)
                 {
                     leaderboardLines[line].gameObject.SetActive(true);
                     leaderboardLines[line].color = defaultColor;
-                    leaderboardLines[line].text = $"{i + 1}.  {scores[i]:N0}  {nick}";
+                    leaderboardLines[line].text = $"{i + 1}.  {getScore(i):N0}  {playerNick}";
                 }
             }
 

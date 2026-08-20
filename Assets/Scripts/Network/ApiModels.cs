@@ -30,6 +30,7 @@ namespace FlyingChick
         public string token_type;
         public string nickname;
         public int user_level;
+        public int coins;
         public int total_slides;
         public int total_runs;
     }
@@ -40,6 +41,7 @@ namespace FlyingChick
         public string login_id;
         public string nickname;
         public int user_level;
+        public int coins;
         public int total_slides;
         public int total_runs;
         public string created_at;
@@ -88,6 +90,35 @@ namespace FlyingChick
         public int score;
         public int island;
         public int great_slides;
+    }
+
+    // 코인 동기화 -- CoinWallet이 현재 보유 코인 총액을 PUT /auth/coins로 보냄.
+    [Serializable]
+    public class CoinSyncRequest
+    {
+        public int coins;
+    }
+
+    [Serializable]
+    public class CoinResponse
+    {
+        public int coins;
+    }
+
+    // GET /scores/me 응답 -- 이 유저 본인의 개인 최고 기록 Top-N.
+    [Serializable]
+    public class UserScoreEntry
+    {
+        public int score;
+        public int island;
+        public int great_slides;
+        public string created_at;
+    }
+
+    [Serializable]
+    public class UserScoresResponse
+    {
+        public UserScoreEntry[] scores;
     }
 
     // "총 이동한 거리값을 가지고 레벨업" 요청 -- 클라이언트는 누적 거리만
