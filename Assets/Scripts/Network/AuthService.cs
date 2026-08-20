@@ -25,12 +25,23 @@ namespace FlyingChick
 
         public bool IsLoggedIn { get; private set; }
         public string ServerNickname { get; private set; }
+        // 총 이동 거리 기반 레벨(서버 계정에 저장된 값) -- 로그인/토큰 검증
+        // 성공 시 서버가 알려주는 값을 그대로 반영. 기본 1은 로그아웃
+        // 상태거나 아직 서버에서 값을 못 받아온 상태의 안전한 초기값.
+        public int ServerLevel { get; private set; } = 1;
+        // 서버 집계 누적치 -- 로그인/me 검증 시 서버가 알려주는 값.
+        // POST /scores 응답에는 포함되지 않으므로 클라이언트가 런 종료 시
+        // 로컬 Leaderboard로부터 임시로 더해두고, 다음 로그인에 서버 값이
+        // 덮어씀. 기록 화면 "나의 기록" 섹션 표시에만 사용됨.
+        public int ServerTotalSlides { get; private set; }
+        public int ServerTotalRuns { get; private set; }
         public string LastError { get; private set; }
 
         public event Action OnLoggedIn;
         public event Action OnLoggedOut;
         public event Action<string> OnAuthError; // human-readable message
         public event Action OnNicknameChanged; // ServerNickname 값이 바뀔 때마다(로그인/회원가입 포함) — PlayerProfile.OnNicknameChanged와 같은 패턴
+        public event Action OnLevelChanged; // ServerLevel 값이 바뀔 때마다(로그인/검증/동기화 포함)
 
         public void Configure(ApiClient apiClient)
         {
@@ -61,8 +72,12 @@ namespace FlyingChick
                 if (result.Success)
                 {
                     ServerNickname = result.Data.nickname;
+                    ServerLevel = result.Data.user_level;
+                    ServerTotalSlides = result.Data.total_slides;
+                    ServerTotalRuns = result.Data.total_runs;
                     IsLoggedIn = true;
                     OnLoggedIn?.Invoke();
+                    OnLevelChanged?.Invoke();
                 }
                 else
                 {
@@ -78,8 +93,41 @@ namespace FlyingChick
             api.AuthToken = null;
             IsLoggedIn = false;
             ServerNickname = null;
+            ServerLevel = 1;
+            ServerTotalSlides = 0;
+            ServerTotalRuns = 0;
             Persist(null);
             OnLoggedOut?.Invoke();
+        }
+
+        // "총 이동한 거리값을 가지고 레벨업" 요청 -- 클라이언트는 레벨을 직접
+        // 계산해서 보내지 않고 누적 거리만 보냄, 서버가 공유 테이블로 다시
+        // 계산해서 돌려준 값을 신뢰함(Meta/PlayerLevel.cs가 호출).
+        // 비로그인 상태면 아무 일도 안 함(로그인 optional 원칙).
+        // 런 종료 시 점수/슬라이드/섬 결과를 서버에 제출하고 로컬 통계를
+        // 즉시 반영함 -- fire-and-forget, 실패해도 다음 로그인 시 서버 값으로
+        // 갱신되므로 재시도 큐 없음(오프라인 플레이 optional 원칙).
+        // 비로그인 상태면 아무 일도 안 함.
+        public void SubmitScore(int runScore, int island, int greatSlides)
+        {
+            if (!IsLoggedIn) return;
+            ServerTotalSlides += greatSlides;
+            ServerTotalRuns += 1;
+            api.Post<object>("/scores",
+                new ScoreSubmitRequest { score = runScore, island = island, great_slides = greatSlides },
+                result => { if (!result.Success) ReportError(result.Error); });
+        }
+
+        public void SyncLevel(float totalDistance)
+        {
+            if (!IsLoggedIn) return;
+            api.Put<LevelResponse>("/auth/level", new LevelSyncRequest { total_distance = totalDistance }, result =>
+            {
+                if (!result.Success) { ReportError(result.Error); return; }
+                if (result.Data.user_level == ServerLevel) return;
+                ServerLevel = result.Data.user_level;
+                OnLevelChanged?.Invoke();
+            });
         }
 
         public void RerollNickname()
@@ -112,10 +160,14 @@ namespace FlyingChick
 
             api.AuthToken = result.Data.access_token;
             ServerNickname = result.Data.nickname;
+            ServerLevel = result.Data.user_level;
+            ServerTotalSlides = result.Data.total_slides;
+            ServerTotalRuns = result.Data.total_runs;
             IsLoggedIn = true;
             Persist(result.Data.access_token);
             OnLoggedIn?.Invoke();
             OnNicknameChanged?.Invoke();
+            OnLevelChanged?.Invoke();
         }
 
         private void ReportError(string error)

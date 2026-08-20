@@ -29,6 +29,9 @@ namespace FlyingChick
         public string access_token;
         public string token_type;
         public string nickname;
+        public int user_level;
+        public int total_slides;
+        public int total_runs;
     }
 
     [Serializable]
@@ -36,6 +39,9 @@ namespace FlyingChick
     {
         public string login_id;
         public string nickname;
+        public int user_level;
+        public int total_slides;
+        public int total_runs;
         public string created_at;
     }
 
@@ -73,5 +79,29 @@ namespace FlyingChick
         public string period;
         public int rank; // 0 when the server sent null (no score in this window) -- see RankingService comment
         public int best_score;
+    }
+
+    // 런 종료 결과 -- DayOverScreen → AuthService.SubmitScore()가 사용.
+    [Serializable]
+    public class ScoreSubmitRequest
+    {
+        public int score;
+        public int island;
+        public int great_slides;
+    }
+
+    // "총 이동한 거리값을 가지고 레벨업" 요청 -- 클라이언트는 누적 거리만
+    // 보내고, 레벨은 서버가 공유 레벨 테이블(level_ranges.json, 유니티도
+    // 같은 파일을 갖고 있음 -- Meta/LevelConfig.cs)로 다시 계산해서 돌려줌.
+    [Serializable]
+    public class LevelSyncRequest
+    {
+        public float total_distance;
+    }
+
+    [Serializable]
+    public class LevelResponse
+    {
+        public int user_level;
     }
 }

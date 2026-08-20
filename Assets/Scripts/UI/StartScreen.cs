@@ -37,6 +37,7 @@ namespace FlyingChick
         private AudioManager audio;
         private PlayerProfile profile;
         private AuthService auth;
+        private PlayerLevel playerLevel;
 
         private Panel currentPanel = Panel.MainMenu;
         private StatsTab currentStatsTab = StatsTab.Leaderboard;
@@ -163,6 +164,11 @@ namespace FlyingChick
                 auth.OnNicknameChanged += HandleAuthNicknameChanged;
             }
         }
+
+        // "총 이동한 거리값을 가지고 레벨업" 요청 -- 기록(Leaderboard) 탭
+        // 닉네임 줄 옆에 표시(RefreshLeaderboard). 별도 이벤트 구독 없이
+        // 매 프레임 RefreshLeaderboard가 이미 하듯 그냥 값을 다시 읽음.
+        public void BindLevel(PlayerLevel playerLevelRef) => playerLevel = playerLevelRef;
 
         private void OnDestroy()
         {
@@ -960,18 +966,9 @@ namespace FlyingChick
             var nicknameColor = new Color(0.75f, 0.45f, 0.05f);
             int line = 0;
 
-            // 요청: "기록에 DB 기록 후 닉네임이 있으면 같이 표시" -- 로그인
-            // 상태(서버 계정 닉네임 존재)면 기록 목록 맨 위에 닉네임을 눈에 띄는
-            // 색으로 표시. 오프라인/비로그인이면 조용히 생략(로컬 기록만 있음,
-            // 온라인 점수 제출/랭킹 자체는 이번 요청 범위 밖 -- Phase C 그대로
-            // 미구현).
-            if (auth != null && !string.IsNullOrEmpty(auth.ServerNickname))
-            {
-                leaderboardLines[line].gameObject.SetActive(true);
-                leaderboardLines[line].color = nicknameColor;
-                leaderboardLines[line].text = $"★ {auth.ServerNickname}";
-                line++;
-            }
+            bool loggedIn = auth != null && !string.IsNullOrEmpty(auth.ServerNickname);
+            // 점수 줄마다 닉네임 표시 -- 로그인이면 서버 닉네임, 비로그인이면 "-"
+            string nick = loggedIn ? auth.ServerNickname : "-";
 
             var scores = leaderboard.TopScores;
             if (scores.Count == 0)
@@ -987,23 +984,30 @@ namespace FlyingChick
                 {
                     leaderboardLines[line].gameObject.SetActive(true);
                     leaderboardLines[line].color = defaultColor;
-                    leaderboardLines[line].text = $"{i + 1}.  {scores[i]:N0}";
+                    leaderboardLines[line].text = $"{i + 1}.  {scores[i]:N0}  {nick}";
                 }
             }
 
-            if (line < MaxLeaderboardLines)
+            // "나의 기록" 섹션 -- 로그인한 유저에게만 표시(서버에 저장된 누적치).
+            // 비로그인이면 이 섹션 전체가 숨겨짐.
+            if (loggedIn)
             {
-                leaderboardLines[line].gameObject.SetActive(true);
-                leaderboardLines[line].color = defaultColor;
-                leaderboardLines[line].text = string.Format(Localization.Get("leaderboard.totalSlides"), leaderboard.TotalSlidesAllTime);
-                line++;
-            }
-            if (line < MaxLeaderboardLines)
-            {
-                leaderboardLines[line].gameObject.SetActive(true);
-                leaderboardLines[line].color = defaultColor;
-                leaderboardLines[line].text = string.Format(Localization.Get("leaderboard.totalRuns"), leaderboard.TotalRuns);
-                line++;
+                if (line < MaxLeaderboardLines)
+                {
+                    leaderboardLines[line].gameObject.SetActive(true);
+                    leaderboardLines[line].color = nicknameColor;
+                    string levelStr = playerLevel != null ? $" · Lv.{playerLevel.Level}" : "";
+                    leaderboardLines[line].text = $"★ {auth.ServerNickname}{levelStr}";
+                    line++;
+                }
+                if (line < MaxLeaderboardLines)
+                {
+                    leaderboardLines[line].gameObject.SetActive(true);
+                    leaderboardLines[line].color = defaultColor;
+                    leaderboardLines[line].text = string.Format(Localization.Get("leaderboard.totalSlides"), auth.ServerTotalSlides)
+                        + "  " + string.Format(Localization.Get("leaderboard.totalRuns"), auth.ServerTotalRuns);
+                    line++;
+                }
             }
 
             for (; line < MaxLeaderboardLines; line++)

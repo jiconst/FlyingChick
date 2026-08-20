@@ -197,6 +197,12 @@ namespace FlyingChick
             var leaderboard = leaderboardGO.AddComponent<Leaderboard>();
             leaderboard.Configure(gm, score, slideJudge);
 
+            // "총 이동한 거리값을 가지고 레벨업" -- 매 런 리셋되는 gm.Island와
+            // 별개로, 런이 끝나도 안 사라지는 계정 평생 누적 거리 기반 레벨.
+            var playerLevelGO = new GameObject("PlayerLevel");
+            var playerLevel = playerLevelGO.AddComponent<PlayerLevel>();
+            playerLevel.Configure(gm, auth);
+
             var audioGO = new GameObject("AudioManager");
             var audio = audioGO.AddComponent<AudioManager>();
             audio.Configure(bird, slideJudge, fever, coinSpawner, cloudSpawner, skyOrbSpawner, gm, dayCycle);
@@ -211,9 +217,10 @@ namespace FlyingChick
 
             var startScreen = gameObject.AddComponent<StartScreen>();
             startScreen.Bind(wallet, dailyMissions, collection, leaderboard, audio, profile, auth);
+            startScreen.BindLevel(playerLevel);
 
             var dayOverScreen = gameObject.AddComponent<DayOverScreen>();
-            dayOverScreen.Bind(score, slideJudge, cloudSpawner, fever, gm, wallet, nest, audio);
+            dayOverScreen.Bind(score, slideJudge, cloudSpawner, fever, gm, wallet, nest, audio, auth);
         }
     }
 }

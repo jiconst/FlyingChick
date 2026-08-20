@@ -30,6 +30,7 @@ namespace FlyingChick
         private CoinWallet wallet;
         private NestMultiplier nest;
         private AudioManager audio;
+        private AuthService auth;
 
         private bool submittedThisRun;
         private bool isNewBest;
@@ -45,7 +46,7 @@ namespace FlyingChick
         private Button homeButton;
         private TextMeshProUGUI homeButtonText;
 
-        public void Bind(ScoreManager scoreRef, SlideJudge slideJudgeRef, CloudSpawner cloudSpawnerRef, FeverSystem feverRef, GameManager gameManagerRef, CoinWallet walletRef, NestMultiplier nestRef, AudioManager audioRef)
+        public void Bind(ScoreManager scoreRef, SlideJudge slideJudgeRef, CloudSpawner cloudSpawnerRef, FeverSystem feverRef, GameManager gameManagerRef, CoinWallet walletRef, NestMultiplier nestRef, AudioManager audioRef, AuthService authRef = null)
         {
             score = scoreRef;
             slideJudge = slideJudgeRef;
@@ -55,6 +56,7 @@ namespace FlyingChick
             wallet = walletRef;
             nest = nestRef;
             audio = audioRef;
+            auth = authRef;
 
             gameManager.OnRunStart += HandleRunStart;
 
@@ -135,6 +137,9 @@ namespace FlyingChick
             {
                 isNewBest = SaveSystem.Instance != null && SaveSystem.Instance.SubmitScore(score.Score);
                 submittedThisRun = true;
+                int slides = slideJudge != null ? slideJudge.TotalSlides : 0;
+                // 로그인 상태면 서버에 이 런의 결과를 제출하고 로컬 통계도 즉시 반영.
+                auth?.SubmitScore(score.Score, gameManager.Island, slides);
             }
 
             Layout();

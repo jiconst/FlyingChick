@@ -45,5 +45,11 @@ namespace FlyingChick
         // 씀(기존 language/nickname 필드와 같은 패턴).
         public float musicVolume = 0.16f;
         public float sfxVolume = 0.6f;
+
+        // "총 이동한 거리값을 가지고 레벨업" 요청 -- 런이 끝날 때마다 그 런의
+        // GameManager.ScrollX가 여기 누적됨(Meta/PlayerLevel.cs). 런 하나가
+        // 끝나도 리셋 안 되는 계정 전체(오프라인 포함) 평생 누적치라, 매 런
+        // 리셋되는 GameManager.Island/ScrollX와는 완전히 다른 값.
+        public float totalDistanceTraveled;
     }
 }

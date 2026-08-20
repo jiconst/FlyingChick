@@ -1,0 +1,84 @@
+{
+  "levels": [
+    {
+      "level": 1,
+      "distance": 0.0
+    },
+    {
+      "level": 2,
+      "distance": 40000.0
+    },
+    {
+      "level": 3,
+      "distance": 100000.0
+    },
+    {
+      "level": 4,
+      "distance": 180000.0
+    },
+    {
+      "level": 5,
+      "distance": 280000.0
+    },
+    {
+      "level": 6,
+      "distance": 400000.0
+    },
+    {
+      "level": 7,
+      "distance": 540000.0
+    },
+    {
+      "level": 8,
+      "distance": 700000.0
+    },
+    {
+      "level": 9,
+      "distance": 880000.0
+    },
+    {
+      "level": 10,
+      "distance": 1080000.0
+    },
+    {
+      "level": 11,
+      "distance": 1300000.0
+    },
+    {
+      "level": 12,
+      "distance": 1540000.0
+    },
+    {
+      "level": 13,
+      "distance": 1800000.0
+    },
+    {
+      "level": 14,
+      "distance": 2080000.0
+    },
+    {
+      "level": 15,
+      "distance": 2380000.0
+    },
+    {
+      "level": 16,
+      "distance": 2700000.0
+    },
+    {
+      "level": 17,
+      "distance": 3040000.0
+    },
+    {
+      "level": 18,
+      "distance": 3400000.0
+    },
+    {
+      "level": 19,
+      "distance": 3780000.0
+    },
+    {
+      "level": 20,
+      "distance": 4180000.0
+    }
+  ]
+}

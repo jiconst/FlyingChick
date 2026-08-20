@@ -848,6 +848,67 @@ M7에서 우선순위 낮다고 스킵했던 두 항목 — `flying-chick.html`�
   요소 없이 순수 이동 거리 기반 — 다이빙/Great Slide로 속도를 올리면 더 빨리
   다음 레벨에 도달함
 
+### 총 이동 거리 기반 계정 레벨 (`FlyingChick-Server` + Unity) — "총 이동한
+거리값을 가지고 레벨업... DB user 테이블에 user_level 필드... 레벨업 range 값은
+엑셀로 관리하고 유니티와 server에 json으로 import" 요청, 2026-08-20
+
+**기존 `GameManager.Island`("LEVEL" 박스, HUD 3차 재배치에서 만든 것)와는
+완전히 다른 개념** — Island는 매 런 리셋되는 배수 상승용 값, 이번 건 런이
+끝나도 안 사라지는 **계정 평생 누적 이동 거리** 기반 레벨. 이름이 겹쳐서
+헷갈릴 수 있는데, 게임플레이 HUD의 LEVEL 박스는 그대로 Island를 보여주고
+안 건드림 — 이번 레벨은 기록(Stats > Leaderboard) 탭에 새로 노출됨.
+
+- **레벨 테이블을 엑셀로 관리 + JSON import**: `FlyingChick-Server/design/
+  LevelRanges.xlsx`가 진짜 소스(Level, RequiredDistance 두 컬럼, 20레벨
+  1차 값 — 매 레벨 간격이 20000씩 늘어나는 가속 곡선, 레벨 2 ≈ 판 하나
+  분량 거리 정도로 감으로 잡음, 리밸런싱 대상). `scripts/
+  export_level_ranges.py`가 이 엑셀을 읽어서 검증(Level 1은 반드시 0,
+  이후 오름차순 등)하고 `app/data/level_ranges.json`(서버)과
+  `FlyingChick/Assets/StreamingAssets/level_ranges.json`(유니티) 양쪽에
+  **완전히 동일한 JSON**을 씀. 값을 바꾸려면 엑셀 고치고 스크립트만 다시
+  돌리면 됨(`cd FlyingChick-Server && python3 scripts/
+  export_level_ranges.py`) — 코드 수정 불필요
+  - **`.gitignore` 충돌 발견 + 수정**: 엑셀을 처음엔 `data/`에 뒀는데,
+    `.gitignore`의 `data/`가 MySQL 바인드 마운트(`data/mysql`)뿐 아니라
+    이름이 겹치는 모든 `data/` 디렉터리(서버 런타임에 꼭 필요한
+    `app/data/level_ranges.json`까지!)를 다 무시해버리는 걸 발견함. 엑셀은
+    `design/`으로 옮기고, `.gitignore`는 `data/` → `/data/`(루트 고정)로
+    바꿔서 `app/data/`는 더 이상 안 걸리게 함. **교훈: gitignore 패턴에
+    슬래시 없이 폴더명만 쓰면 그 이름을 쓰는 모든 깊이의 디렉터리에 다
+    걸림 — 특정 위치 하나만 무시하고 싶으면 항상 앞에 `/`를 붙일 것.**
+  - `app/level_config.py`(서버)/`Meta/LevelConfig.cs`(유니티) 둘 다 이
+    JSON을 읽어서 "거리 → 레벨" 계산만 함, 값 자체는 하나도 하드코딩 안 함
+- **레벨 계산은 항상 서버가 최종 권위**: 클라이언트는 레벨 숫자를 직접
+  계산해서 보내지 않고 **누적 거리만** `PUT /auth/level`로 보냄
+  (`LevelSyncRequest{total_distance}`) — 서버가 자기 JSON 테이블로 다시
+  계산해서(`level_for_distance`) `user.user_level = max(기존값, 계산값)`으로만
+  갱신(`app/routers/auth.py`). 클라이언트가 계산을 틀리거나 구버전
+  테이블을 갖고 있어도 서버 값이 항상 맞고, 여러 기기에서 로그인해도
+  레벨이 절대 낮아지지 않음
+- **DB**: `users.user_level INT NOT NULL DEFAULT 1` 추가(`app/models.py`),
+  Alembic 리비전 `alembic/versions/0002_user_level.py`(0001 뒤에 체이닝).
+  `TokenResponse`/`MeResponse`에 `user_level` 필드 추가해서 로그인/회원가입/
+  토큰 검증 시 클라이언트가 항상 최신 값을 받아감
+- **Unity**: `Meta/PlayerLevel.cs`(신규, GameManager/AuthService처럼
+  `GameBootstrapper`가 만들고 연결, 싱글톤 아님) — `SaveData.
+  totalDistanceTraveled`(런이 끝나도 리셋 안 되는 로컬 누적치)를
+  `GameManager.OnRunEnd`마다 그 런의 `ScrollX`만큼 늘리고, 로그인
+  상태면 서버에도 동기화. 화면에 보여줄 `Level`은
+  `Mathf.Max(로컬 계산값, AuthService.ServerLevel)` — 오프라인 진행과
+  다른 기기 진행 둘 다 놓치지 않음(어느 쪽이 더 높든 그게 이김).
+  `AuthService`에 `ServerLevel`/`SyncLevel(distance)`/`OnLevelChanged`
+  신규 추가. `UI/StartScreen.cs`의 기록 탭 닉네임 줄에 `· Lv.N`으로 같이
+  표시(로그인 안 했어도 로컬 레벨은 보여줌 — 이 레벨 자체는 로그인
+  여부와 무관하게 항상 동작하는 게 원칙, 로그인은 그걸 계정에 영구
+  저장/동기화해주는 것뿐)
+- **에디터 미확인**: Unity Editor로 직접 플레이해서 레벨업/동기화 흐름을
+  끝까지 확인하진 못함. 서버 쪽은 코드/문법 검사만 했고, 이 환경의 Docker
+  빌드가 레지스트리 타임아웃 문제로 이번 세션에서 재빌드 확인이 막혀서
+  `docker compose up --build` + `./manage.sh migrate`(또는 컨테이너
+  재시작 시 자동 실행되는 `alembic upgrade head`)로 실제 DB에 마이그레이션이
+  적용되는지, `curl`로 `/auth/level` 왕복이 되는지는 사용자가 직접 한 번
+  확인 필요
+
 ### 물리/지형/픽업 밸런스 조정 (`Player/BirdPhysics.cs`, `Terrain/GroundSampler.cs`,
 `Collectibles/CoinField.cs`, `Collectibles/SkyOrbField.cs`, `Audio/AudioManager.cs`) —
 2026-08-20, 한 번에 들어온 여러 개별 피드백 묶음
