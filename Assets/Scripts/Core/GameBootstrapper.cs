@@ -199,7 +199,7 @@ namespace FlyingChick
 
             var audioGO = new GameObject("AudioManager");
             var audio = audioGO.AddComponent<AudioManager>();
-            audio.Configure(bird, slideJudge, fever, coinSpawner, cloudSpawner, gm, dayCycle);
+            audio.Configure(bird, slideJudge, fever, coinSpawner, cloudSpawner, skyOrbSpawner, gm, dayCycle);
 
             var hud = gameObject.AddComponent<HUD>();
             hud.Bind(bird, score, slideJudge, fever, gm);

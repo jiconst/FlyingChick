@@ -41,20 +41,25 @@ namespace FlyingChick
                 {
                     // Reference offset (60-100) assumed taller hills/higher
                     // launches than our current tuning reaches -- lowered so
-                    // it's actually catchable mid-flight.
+                    // it's actually catchable mid-flight. Lowered again
+                    // (28-54 -> 14-26) per "언덕에 가급적 붙어 있었으면" feedback.
                     entries.Add(new CoinEntry
                     {
                         WorldX = lastCoinX,
-                        Offset = 28f + (float)rng.NextDouble() * 26f,
+                        Offset = 14f + (float)rng.NextDouble() * 12f,
                         Type = CoinType.Speed
                     });
                 }
-                else if (roll < 0.75)
+                else if (roll < 0.40)
                 {
+                    // "노란색 골드나 나오는 횟수를 줄이고" 피드백 -- 골드 코인 런이
+                    // 걸릴 확률을 0.65(0.10~0.75)에서 0.30(0.10~0.40)으로 낮춤,
+                    // 그만큼 아무것도 없는 구간(roll>=0.40)이 늘어남. 높이도
+                    // 42~78 -> 18~34로 낮춰서 언덕에 더 붙어 있게 함.
                     int run = 3 + (int)(rng.NextDouble() * 4);
                     for (int i = 0; i < run; i++)
                     {
-                        float off = 42f + Mathf.Sin((float)i / run * Mathf.PI) * 36f;
+                        float off = 18f + Mathf.Sin((float)i / run * Mathf.PI) * 16f;
                         entries.Add(new CoinEntry
                         {
                             WorldX = lastCoinX + i * 38f,
@@ -64,7 +69,7 @@ namespace FlyingChick
                     }
                     lastCoinX += run * 38f;
                 }
-                // else (roll >= 0.75): a gap, no coins this cycle -- matches reference pacing.
+                // else (roll >= 0.40): a gap, no coins this cycle.
             }
         }
 

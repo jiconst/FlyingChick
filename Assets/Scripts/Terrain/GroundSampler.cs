@@ -45,6 +45,11 @@ namespace FlyingChick
             // this is deferred to a later level-balance pass. Widened again
             // (0.30-0.42 -> 0.36-0.50) per playtest feedback -- more time
             // between hills to react. Height range left untouched.
+            //
+            // Briefly gentled further (0.36-0.50 -> 0.45-0.62 / 0.11-0.16 ->
+            // 0.07-0.10) per "언덕이 좀더 완만하고" feedback, then reverted
+            // (2026-08-20) after "게임이 너무 쉬워졌다" -- restored to these
+            // values.
             minHalfWave = viewHeight * 0.36f;
             maxHalfWave = viewHeight * 0.50f;
             minAmp = viewHeight * 0.11f;

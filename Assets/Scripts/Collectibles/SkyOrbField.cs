@@ -49,8 +49,10 @@ namespace FlyingChick
                 // 이상해졌어, 수시로 너무 큰 줌아웃" feedback). Widened so even
                 // at max speed it's at least several seconds between orbs.
                 float wx = baseX + 6000f + (float)rng.NextDouble() * 4000f;
-                // Same range as CoinField's Speed coin offset.
-                float offset = 28f + (float)rng.NextDouble() * 26f;
+                // Same range as CoinField's Speed coin offset (kept in sync
+                // with it -- lowered 28-54 -> 14-26 per "언덕에 가급적 붙어
+                // 있었으면 좋겠어... 녹색공 파란색공 마찬가지" feedback).
+                float offset = 14f + (float)rng.NextDouble() * 12f;
                 entries.Add(new OrbEntry { WorldX = wx, Offset = offset, Taken = false });
             }
         }

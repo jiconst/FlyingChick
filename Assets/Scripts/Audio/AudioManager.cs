@@ -21,12 +21,17 @@ namespace FlyingChick
         private AudioSource bgmSource;
 
         private AudioClip coinClip, speedClip, greatSlideClip, feverClip, cloudClip, islandClip, launchClip, clickClip, dayOverClip;
+        // "녹색공을 먹었을때는 병아리 삐약거리는 사운드와 함께 정말 병아리가
+        // 날아가는 듯한 사운드" 요청 -- 두 클립을 같이 재생(Play()를 두 번
+        // 호출하면 각각 다른 sfxSources 슬롯을 잡아서 자연스럽게 겹쳐 들림).
+        private AudioClip skyFlightChirpClip, skyFlightWhooshClip;
 
         private BirdController bird;
         private SlideJudge slideJudge;
         private FeverSystem fever;
         private CoinSpawner coinSpawner;
         private CloudSpawner cloudSpawner;
+        private SkyOrbSpawner skyOrbSpawner;
         private GameManager gameManager;
         private DayCycle dayCycle;
 
@@ -99,6 +104,12 @@ namespace FlyingChick
             clickClip = ProceduralAudio.NoiseBurst("SFX_Click", 0.05f, 0.25f);
             dayOverClip = ProceduralAudio.Chime("SFX_DayOver", new[] { 587.3f, 493.9f, 392f }, 0.35f, 0.3f);
 
+            // Sky Flight 오브 픽업: 병아리 "삐약-삐약" 하는 빠른 4음 치프(chirp) +
+            // 훨씬 길고 상승하는 스윕(launchClip의 0.18초짜리 발사음보다 훨씬
+            // 길게, 1초에 걸쳐 낮은 데서 높은 데로) -- "정말 날아가는" 느낌.
+            skyFlightChirpClip = ProceduralAudio.Chime("SFX_SkyFlightChirp", new[] { 2200f, 1800f, 2400f, 2000f }, 0.07f, 0.4f);
+            skyFlightWhooshClip = ProceduralAudio.Sweep("SFX_SkyFlightWhoosh", 250f, 1100f, 1.0f, 0.3f);
+
             // Placeholder ambient bed, not real composed music. The loop
             // seam itself is fixed (see ProceduralAudio.Pad), but two
             // sustained low sine tones (220/330Hz, near the register of an
@@ -110,13 +121,14 @@ namespace FlyingChick
             bgmSource.clip = ProceduralAudio.Pad("BGM_Ambient", 440f, 659.3f, 6f, 0.35f);
         }
 
-        public void Configure(BirdController birdRef, SlideJudge slideJudgeRef, FeverSystem feverRef, CoinSpawner coinSpawnerRef, CloudSpawner cloudSpawnerRef, GameManager gameManagerRef, DayCycle dayCycleRef)
+        public void Configure(BirdController birdRef, SlideJudge slideJudgeRef, FeverSystem feverRef, CoinSpawner coinSpawnerRef, CloudSpawner cloudSpawnerRef, SkyOrbSpawner skyOrbSpawnerRef, GameManager gameManagerRef, DayCycle dayCycleRef)
         {
             bird = birdRef;
             slideJudge = slideJudgeRef;
             fever = feverRef;
             coinSpawner = coinSpawnerRef;
             cloudSpawner = cloudSpawnerRef;
+            skyOrbSpawner = skyOrbSpawnerRef;
             gameManager = gameManagerRef;
             dayCycle = dayCycleRef;
 
@@ -126,6 +138,7 @@ namespace FlyingChick
             coinSpawner.OnCoinCollected += HandleCoin;
             coinSpawner.OnSpeedCoinCollected += HandleSpeedCoin;
             cloudSpawner.OnCloudTouched += HandleCloudTouch;
+            skyOrbSpawner.OnOrbCollected += HandleSkyFlight;
             gameManager.OnIslandAdvanced += HandleIslandAdvanced;
             gameManager.OnRunStart += HandleRunStart;
             dayCycle.OnDayOver += HandleDayOver;
@@ -142,6 +155,7 @@ namespace FlyingChick
                 coinSpawner.OnSpeedCoinCollected -= HandleSpeedCoin;
             }
             if (cloudSpawner != null) cloudSpawner.OnCloudTouched -= HandleCloudTouch;
+            if (skyOrbSpawner != null) skyOrbSpawner.OnOrbCollected -= HandleSkyFlight;
             if (gameManager != null)
             {
                 gameManager.OnIslandAdvanced -= HandleIslandAdvanced;
@@ -160,6 +174,11 @@ namespace FlyingChick
         private void HandleCoin() => Play(coinClip);
         private void HandleSpeedCoin() => Play(speedClip);
         private void HandleCloudTouch() => Play(cloudClip);
+        private void HandleSkyFlight()
+        {
+            Play(skyFlightChirpClip);
+            Play(skyFlightWhooshClip);
+        }
         private void HandleIslandAdvanced(int island) => Play(islandClip);
         private void HandleDayOver() => Play(dayOverClip);
 
