@@ -1,9 +1,9 @@
 using System;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
-    // Wraps FlyingChick-Server's /auth/* endpoints. Not a singleton (only
+    // Wraps HillyWings-Server's /auth/* endpoints. Not a singleton (only
     // GameManager/ScoreManager/SaveSystem are, per this project's
     // convention) -- GameBootstrapper creates and wires it like
     // CoinWallet/BirdCollection.

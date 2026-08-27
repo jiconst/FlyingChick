@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Wires the current milestone slice together at runtime so Play works
     // with zero manual scene setup. The camera's X position stays
@@ -33,14 +33,18 @@ namespace FlyingChick
     // (Meta/PlayerProfile.cs, Meta/NicknameGenerator.cs). Also an OPTIONAL
     // online account layer (Network/ApiClient.cs, AuthService.cs,
     // RankingService.cs) talking to a separate backend
-    // (~/src/FlyingChick-Server, FastAPI + MySQL, see its own README) --
+    // (~/src/HillyWings-Server, FastAPI + MySQL, see its own README) --
     // login unlocks online score rankings but the game is fully playable
     // offline with zero account, always.
     public class GameBootstrapper : MonoBehaviour
     {
         [SerializeField] private float viewHeight = 720f;
         [SerializeField] private int terrainSeed = 0; // 0 = random each run
-        [SerializeField] private string apiBaseUrl = "http://localhost:8000"; // FlyingChick-Server; see Network/ApiClient.cs
+        // 서버 주소는 HillyWings-Server/.env (SERVER_HOST, API_PORT) 에서 관리됨.
+        // 에디터 시작 시 ServerConfigSync 가 ServerConfig.cs 를 자동 재생성하므로
+        // 서버 주소 변경은 .env 만 수정하면 됨.
+        // 테스트용 임시 오버라이드가 필요할 때만 아래 필드를 채울 것 (비워두면 ServerConfig 사용).
+        [SerializeField] private string apiBaseUrlOverride = "";
 
         private void Start()
         {
@@ -85,14 +89,14 @@ namespace FlyingChick
             var profile = profileGO.AddComponent<PlayerProfile>();
             profile.Configure();
 
-            // Online account (FlyingChick-Server, a separate FastAPI/MySQL
-            // codebase -- ~/src/FlyingChick-Server). Entirely optional: a
+            // Online account (HillyWings-Server, a separate FastAPI/MySQL
+            // codebase -- ~/src/HillyWings-Server). Entirely optional: a
             // failed/unreachable server just leaves the player logged out,
             // never blocks startup or offline play. See AuthService's
             // class comment.
             var apiGO = new GameObject("ApiClient");
             var api = apiGO.AddComponent<ApiClient>();
-            api.Configure(apiBaseUrl);
+            api.Configure(string.IsNullOrEmpty(apiBaseUrlOverride) ? ServerConfig.BaseUrl : apiBaseUrlOverride);
 
             var authGO = new GameObject("AuthService");
             var auth = authGO.AddComponent<AuthService>();

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Reference: drawHills()'s "grass tufts along crest" pass -- a short
     // diagonal stroke every 26 canvas units along the hill crest, skipped

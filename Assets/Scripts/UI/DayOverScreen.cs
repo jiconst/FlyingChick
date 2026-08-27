@@ -2,7 +2,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Reference: endScreen -- final stats (score/island/slides), submits to
     // SaveSystem, shows Best line, "다시하기"(restart)/"홈"(back to start)

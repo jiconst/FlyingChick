@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Listens to BirdController's landing events and turns them into streak/
     // score/fever decisions. Reference: holdWasDownhill landing -> streak++,

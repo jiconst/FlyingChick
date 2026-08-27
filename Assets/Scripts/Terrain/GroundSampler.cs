@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Randomized rolling-hill terrain: a sequence of control points at
     // random x-spacing (hill width) and random y-offset (hill height),

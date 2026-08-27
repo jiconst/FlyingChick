@@ -1,9 +1,9 @@
-# CLAUDE.md — Flying Chick (Tiny Wings 스타일 Unity 게임)
+# CLAUDE.md — Hilly Wings (Tiny Wings 스타일 Unity 게임)
 
 ## 프로젝트 개요
 
 Tiny Wings 스타일의 원버튼 슬라이딩 게임을 Unity(C#)로 개발한다.
-참조 자료: HTML5 프로토타입 `../MyProject/sample/flying-chick.html`(핵심 물리·점수 로직
+참조 자료: HTML5 프로토타입 `../MyProject/sample/hilly-wings.html`(핵심 물리·점수 로직
 완성본)과 Tiny Wings 스크린샷 17장(UI/메타 시스템 참조).
 
 **핵심 게임 루프**: 화면을 누르면 새가 급강하하고, 떼면 상승한다. 내리막에서 눌러 가속 →
@@ -20,8 +20,8 @@ Tiny Wings 스타일의 원버튼 슬라이딩 게임을 Unity(C#)로 개발한�
 - 입력은 New Input System 패키지 기반 (`Active Input Handling` = "Input System Package"로
   설정된 프로젝트라 레거시 `UnityEngine.Input`은 예외를 던짐 — 절대 쓰지 말 것, 항상
   `InputService`를 통해서만 입력을 읽는다)
-- 네임스페이스: `FlyingChick` (단일 네임스페이스, 폴더는 조직 용도로만 사용)
-- **프로젝트 폴더**: `~/src/FlyingChick` 하나로 통일 — Claude Code 작업 폴더 = 실제 Unity
+- 네임스페이스: `HillyWings` (단일 네임스페이스, 폴더는 조직 용도로만 사용)
+- **프로젝트 폴더**: `~/src/HillyWings` 하나로 통일 — Claude Code 작업 폴더 = 실제 Unity
   프로젝트 폴더 (Unity Hub도 이 경로를 가리킴)
 - **IDE**: Rider (`com.unity.ide.rider`). Rider 디버깅은 Unity 에디터를 먼저 켜둔 상태에서
   "Attach to Unity Editor"로 attach
@@ -46,7 +46,7 @@ Tiny Wings 스타일의 원버튼 슬라이딩 게임을 Unity(C#)로 개발한�
 
 ## 좌표계 — 중요, 반드시 이해하고 코드 작성할 것
 
-`flying-chick.html`은 canvas 좌표계(원점 좌상단, y가 아래로 증가)로 작성돼 있다. 이 물리·
+`hilly-wings.html`은 canvas 좌표계(원점 좌상단, y가 아래로 증가)로 작성돼 있다. 이 물리·
 지형 수식을 **그대로(상수까지 동일하게) 포팅**해서 검증된 손맛을 잃지 않기 위해,
 `GroundSampler`와 `BirdPhysics`는 **canvas 좌표계 그대로("canvas space")** 동작한다.
 Unity는 중앙원점·y-up이라, 변환은 딱 한 곳(`ScreenSpace.cs`)에서만 일어난다:
@@ -233,7 +233,7 @@ Transform에 적용). Rigidbody2D 사용 안 함, `BirdController.FixedUpdate`�
 ### 저장 구조 (`Meta/SaveData.cs`, `Meta/SaveSystem.cs`)
 - 최고점수: M4부터 그대로 `PlayerPrefs` (스펙: "PlayerPrefs는 최고점수만")
 - 그 외 전부(코인, Nest 배수 보너스, 데일리 미션 날짜/진행/완료): `JsonUtility` +
-  `Application.persistentDataPath`의 `flyingchick_save.json` 한 파일. `SaveSystem`은
+  `Application.persistentDataPath`의 `hillywings_save.json` 한 파일. `SaveSystem`은
   직렬화/파일 I/O만 담당하고 게임 로직은 전혀 모름 — `CoinWallet`/`NestMultiplier`/
   `DailyMissions`가 `SaveSystem.Instance.Data`를 직접 읽고 쓴 뒤 `Save()` 호출
 - **ScriptableObject 대신 일반 C# 데이터**(`Meta/MissionPool.cs`, `Meta/BirdPool.cs`)로
@@ -245,7 +245,7 @@ Transform에 적용). Rigidbody2D 사용 안 함, `BirdController.FixedUpdate`�
 ### 코인 지갑 (`Meta/CoinWallet.cs`)
 - `GameManager.OnRunEnd`(day-over 직전, 스탯이 아직 살아있는 시점)를 구독해서 자동으로
   코인 지급 — 다른 시스템이 명시적으로 호출할 필요 없음
-- **점수→코인 환산 비율은 발명한 값** (`flying-chick.html`엔 메타 레이어 자체가 없어서
+- **점수→코인 환산 비율은 발명한 값** (`hilly-wings.html`엔 메타 레이어 자체가 없어서
   참고할 원본이 없음): `score / 50` 내림. `CoinWallet.scoreToCoinsRatio` 하나로 조절
 
 ### Nest Multiplier (`Meta/NestMultiplier.cs`)
@@ -522,7 +522,7 @@ Canvas 계층을 코드로 만들어 두고(에디터 수동 설정 없음, 기�
   처리하는 게 나음), 언덕 크레스트 rim 하이라이트 라인
 
 ### 배경 패럴랙스 언덕 / 잔디 tuft (`Terrain/BackgroundHillGenerator.cs`, `Terrain/GrassTuftGenerator.cs`)
-M7에서 우선순위 낮다고 스킵했던 두 항목 — `flying-chick.html`의 `drawHills()`에서 그대로 포팅.
+M7에서 우선순위 낮다고 스킵했던 두 항목 — `hilly-wings.html`의 `drawHills()`에서 그대로 포팅.
 
 - **`BackgroundHillGenerator.cs`**: `drawHills()`의 "background echo hills (parallax,
   lighter)" 부분. **같은** `GameManager.Ground`(`GroundSampler`)를 다시 샘플링하되,
@@ -848,7 +848,7 @@ M7에서 우선순위 낮다고 스킵했던 두 항목 — `flying-chick.html`�
   요소 없이 순수 이동 거리 기반 — 다이빙/Great Slide로 속도를 올리면 더 빨리
   다음 레벨에 도달함
 
-### 총 이동 거리 기반 계정 레벨 (`FlyingChick-Server` + Unity) — "총 이동한
+### 총 이동 거리 기반 계정 레벨 (`HillyWings-Server` + Unity) — "총 이동한
 거리값을 가지고 레벨업... DB user 테이블에 user_level 필드... 레벨업 range 값은
 엑셀로 관리하고 유니티와 server에 json으로 import" 요청, 2026-08-20
 
@@ -858,15 +858,15 @@ M7에서 우선순위 낮다고 스킵했던 두 항목 — `flying-chick.html`�
 헷갈릴 수 있는데, 게임플레이 HUD의 LEVEL 박스는 그대로 Island를 보여주고
 안 건드림 — 이번 레벨은 기록(Stats > Leaderboard) 탭에 새로 노출됨.
 
-- **레벨 테이블을 엑셀로 관리 + JSON import**: `FlyingChick-Server/design/
+- **레벨 테이블을 엑셀로 관리 + JSON import**: `HillyWings-Server/design/
   LevelRanges.xlsx`가 진짜 소스(Level, RequiredDistance 두 컬럼, 20레벨
   1차 값 — 매 레벨 간격이 20000씩 늘어나는 가속 곡선, 레벨 2 ≈ 판 하나
   분량 거리 정도로 감으로 잡음, 리밸런싱 대상). `scripts/
   export_level_ranges.py`가 이 엑셀을 읽어서 검증(Level 1은 반드시 0,
   이후 오름차순 등)하고 `app/data/level_ranges.json`(서버)과
-  `FlyingChick/Assets/StreamingAssets/level_ranges.json`(유니티) 양쪽에
+  `HillyWings/Assets/StreamingAssets/level_ranges.json`(유니티) 양쪽에
   **완전히 동일한 JSON**을 씀. 값을 바꾸려면 엑셀 고치고 스크립트만 다시
-  돌리면 됨(`cd FlyingChick-Server && python3 scripts/
+  돌리면 됨(`cd HillyWings-Server && python3 scripts/
   export_level_ranges.py`) — 코드 수정 불필요
   - **`.gitignore` 충돌 발견 + 수정**: 엑셀을 처음엔 `data/`에 뒀는데,
     `.gitignore`의 `data/`가 MySQL 바인드 마운트(`data/mysql`)뿐 아니라
@@ -1119,7 +1119,7 @@ M7에서 우선순위 낮다고 스킵했던 두 항목 — `flying-chick.html`�
   정보가 안 늘어남. 나중에 공유/온라인 랭킹으로 확장되면 그때 다시 볼 것(`PlayerProfile.cs`
   주석에도 기록)
 
-## 8단계 — 온라인 계정 / 점수 랭킹 (`FlyingChick-Server`, Phase A+B 완료 / Phase C 대기)
+## 8단계 — 온라인 계정 / 점수 랭킹 (`HillyWings-Server`, Phase A+B 완료 / Phase C 대기)
 
 사용자가 회원가입/로그인(아이디+비밀번호), 서버 발급 고유 닉네임, 점수 랭킹 집계 화면을
 요청 — 별도 Python FastAPI + MySQL 백엔드를 Docker로 만들고, Unity 클라이언트에 연동. 계획
@@ -1128,7 +1128,7 @@ M7에서 우선순위 낮다고 스킵했던 두 항목 — `flying-chick.html`�
 오프라인으로 그대로 동작해야 함.** 이 원칙이 깨지면 안 되는 게 이 8단계 전체에서 가장 중요한
 불변 조건.
 
-### 백엔드 (`~/src/FlyingChick-Server`, Unity 프로젝트와 완전히 별개의 Python 저장소, 자체 git repo)
+### 백엔드 (`~/src/HillyWings-Server`, Unity 프로젝트와 완전히 별개의 Python 저장소, 자체 git repo)
 - FastAPI(최신) + Pydantic v2 + SQLAlchemy 2.0(동기, PyMySQL) + Alembic 마이그레이션 +
   MySQL 8.4(도커, `:latest` 아님 — 최근 `latest` 태그가 불안정한 "innovation" 릴리스
   라인을 가리켜서 명시적으로 `8.4` LTS 고정) + bcrypt(패스워드 해시, 72바이트 제한 직접
@@ -1153,7 +1153,7 @@ M7에서 우선순위 낮다고 스킵했던 두 항목 — `flying-chick.html`�
   약한 비밀번호(422)/점수 제출/랭킹 3종(daily·weekly·alltime, 유저별 최고점만 반영되고
   순위 역전도 정확)/내 순위/닉네임 재생성·직접변경/닉네임 중복(409)/미인증 접근(401) 전부
   기대한 대로 동작
-- Phase A 완료 시점에 `~/src/FlyingChick-Server`를 git init + 최초 커밋함(별도 repo,
+- Phase A 완료 시점에 `~/src/HillyWings-Server`를 git init + 최초 커밋함(별도 repo,
   Unity 프로젝트 git과 무관)
 
 ### Unity 네트워킹 레이어 (`Assets/Scripts/Network/`, 신규 폴더)
@@ -1347,7 +1347,7 @@ STATS 하위 탭으로 통합 · 설정 진입 시 로그인/회원가입 선택
 - 원작 Tiny Wings의 아트 에셋·사운드 복제 (스타일 참고만, 에셋은 전부 자체 제작)
 - 인앱 결제/광고/서버 연동 (전부 로컬)
 - `groundY`/`groundSlope`/물리 상수를 "정리"한답시고 값 바꾸지 말 것 — HTML 원본과 어긋나면
-  검증된 손맛이 깨짐. 바꾸고 싶으면 먼저 `flying-chick.html`에서 값을 바꿔 손맛을 확인한 뒤
+  검증된 손맛이 깨짐. 바꾸고 싶으면 먼저 `hilly-wings.html`에서 값을 바꿔 손맛을 확인한 뒤
   포팅할 것.
 
 ## 테스트 체크리스트
@@ -1366,7 +1366,7 @@ STATS 하위 탭으로 통합 · 설정 진입 시 로그인/회원가입 선택
       3개 전부 통과했을 때 다음 런부터 배수가 실제로 +1 되는지 (M5)
 - [ ] 데일리 미션이 여러 런에 걸쳐 누적되고, 완료 시 코인 100개 지급되는지 (M5)
 - [ ] 앱을 껐다 켜도(같은 날) 데일리 미션 진행/코인/Nest 배수가 유지되는지 (M5 — JSON
-      저장이라 `Application.persistentDataPath`의 `flyingchick_save.json` 확인 가능)
+      저장이라 `Application.persistentDataPath`의 `hillywings_save.json` 확인 가능)
 - [ ] 홈 화면 새 아이콘 클릭 시 선택되고(흰 테두리), 실제 플레이에 그 새 색상이 반영되는지
       (M6)
 - [ ] 알 구매(500코인) 시 코인이 차감되고, 못 가진 새 중 하나가 무작위로 부화하는지, 코인
@@ -1396,7 +1396,7 @@ STATS 하위 탭으로 통합 · 설정 진입 시 로그인/회원가입 선택
       껐다 켜도 유지되는지 (포스트-M7)
 - [ ] **닉네임 입력 중 스페이스바를 눌러도 게임이 실수로 시작되지 않는지** (포스트-M7 —
       입력 필드 포커스 가드 확인)
-- [ ] **`FlyingChick-Server`를 끈 상태(또는 `apiBaseUrl`을 일부러 틀리게)에서도 게임이
+- [ ] **`HillyWings-Server`를 끈 상태(또는 `apiBaseUrl`을 일부러 틀리게)에서도 게임이
       아무 문제 없이 완전히 오프라인으로 플레이되는지** — 온라인 계정 기능 전체에서 가장
       중요한 불변 조건. 시작 화면 진입, 로그인 버튼 클릭 시 서버 에러가 나도 오프라인 UI가
       멀쩡한지 확인
@@ -1502,7 +1502,7 @@ STATS 하위 탭으로 통합 · 설정 진입 시 로그인/회원가입 선택
 자체 한글 폰트를 명시적으로 꽂음).
 
 **온라인 계정/랭킹 기능을 테스트하려면(선택 사항 — 안 띄워도 게임은 정상 플레이됨)**:
-`~/src/FlyingChick-Server`에서 `docker compose up --build`로 로컬 백엔드를 먼저 띄울 것.
+`~/src/HillyWings-Server`에서 `docker compose up --build`로 로컬 백엔드를 먼저 띄울 것.
 `GameBootstrapper`의 `apiBaseUrl` 필드(기본값 `http://localhost:8000`)가 이 서버를 가리킴.
 서버를 안 띄워도 로그인 버튼을 누르면 에러 메시지만 뜨고 오프라인 플레이는 그대로 정상
 동작해야 함 — 이게 깨지면 버그.
@@ -1588,16 +1588,16 @@ STATS 하위 탭으로 통합 · 설정 진입 시 로그인/회원가입 선택
    `statsMissionsGroup`)를 이걸로 교체해 해결. 개별 요소(버튼 하나 등)처럼 스스로
    `SetTopLeft`로 크기까지 지정하는 자식은 이 문제와 무관하므로 그대로 `CreateChild`
    사용.
-8. **"FlyingChick-Server와 연결이 안 된다(cannot connect)" 오진단 주의**: 실제로는
+8. **"HillyWings-Server와 연결이 안 된다(cannot connect)" 오진단 주의**: 실제로는
    버그가 아니라 타이밍 문제였던 사례(2026-08-19) — `docker ps`로는 컨테이너가
-   실행 중으로 보이지만, `docker logs --timestamps flyingchick-server-api-1`로
+   실행 중으로 보이지만, `docker logs --timestamps hillywings-server-api-1`로
    보면 재시작 직후였음(맥이 잠들었다 깨거나 Docker Desktop을 다시 켠 직후 등).
    `api` 컨테이너는 시작할 때 `alembic upgrade head`가 DB 준비를 기다리며 몇 초간
    재시도하는 구간이 있고(Dockerfile 참고), **이 구간엔 uvicorn 자체가 아직 안 떠서
    포트 8000이 정말로 아무것도 안 듣고 있음** — 이 짧은 창에 Unity가 요청을 보내면
    `UnityWebRequest`가 진짜 "Cannot connect to destination host"를 받음(서버
    로직/네트워킹 코드 문제 아님). **확인 방법**: `docker ps`(Up 시간이 몇 분 이내면
-   의심), `docker logs --timestamps flyingchick-server-api-1 | grep "Uvicorn
+   의심), `docker logs --timestamps hillywings-server-api-1 | grep "Uvicorn
    running"`(최근 재시작 시각 확인), `curl http://localhost:8000/health` (200 OK면
    지금은 정상). 재시작 직후가 아니라면 `./manage.sh status`/`./manage.sh logs`로
    실제 에러를 봐야 함 — "cannot connect"라고 곧바로 클라이언트 코드부터 의심하지

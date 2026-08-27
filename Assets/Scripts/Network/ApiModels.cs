@@ -1,8 +1,8 @@
 using System;
 
-namespace FlyingChick
+namespace HillyWings
 {
-    // Request/response DTOs for FlyingChick-Server, deserialized via
+    // Request/response DTOs for HillyWings-Server, deserialized via
     // JsonUtility (same approach the local save system already uses --
     // see Meta/SaveData.cs -- so no new JSON library is introduced).
     // JsonUtility maps fields by exact name with no renaming support, so

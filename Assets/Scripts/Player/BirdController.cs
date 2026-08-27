@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Orchestrates BirdPhysics: feeds it input/dt/scrollX each FixedUpdate,
     // advances the shared world scroll, and applies the canvas-space result

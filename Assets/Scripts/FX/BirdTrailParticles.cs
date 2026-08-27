@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Reference: spawnDust() while diving (~50% chance per 60fps frame),
     // spawnStar() while Fever is active (~60% chance per 60fps frame). Two

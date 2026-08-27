@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Owns fever's timer/multiplier state only -- it doesn't know WHEN fever
     // should start (that's SlideJudge's call, based on streak). Reference:

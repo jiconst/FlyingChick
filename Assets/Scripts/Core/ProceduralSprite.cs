@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Generic runtime shape-to-texture helpers for placeholder art (no
     // imported assets). Convention: pixelsPerUnit = 1, i.e. 1 texture pixel

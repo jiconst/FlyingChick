@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // 시작 화면. GameState.Start일 때만 보임.
     //
@@ -327,7 +327,7 @@ namespace FlyingChick
 
             var title = UIFactory.CreateText(parent, "Title", 44, brown, TextAlignmentOptions.Center, FontStyles.Bold);
             titleRect = (RectTransform)title.transform;
-            title.text = "Flying Chick";
+            title.text = "Hilly Wings";
 
             bestText = UIFactory.CreateText(parent, "Best", 18, brown, TextAlignmentOptions.Center);
 

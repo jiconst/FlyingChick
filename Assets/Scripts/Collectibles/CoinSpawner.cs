@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Pooled coin visuals + pickup detection. No per-coin Instantiate/Destroy
     // -- a fixed pool of SpriteRenderers is repositioned onto whichever

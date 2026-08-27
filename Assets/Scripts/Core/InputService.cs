@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Minimal touch/mouse/keyboard input abstraction using the new Input
     // System package (this project's Active Input Handling is set to

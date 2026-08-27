@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
-    // Coin placement, ported 1:1 from flying-chick.html's ensureCoins().
+    // Coin placement, ported 1:1 from hilly-wings.html's ensureCoins().
     // Pure data (no MonoBehaviour) -- CoinSpawner owns pooled visuals and
     // collision, reading this list. Canvas-space convention.
     public class CoinField

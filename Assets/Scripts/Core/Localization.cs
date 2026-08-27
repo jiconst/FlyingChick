@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace FlyingChick
+namespace HillyWings
 {
     public enum Language
     {

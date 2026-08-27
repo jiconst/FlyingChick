@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Reference: drawHills()'s "background echo hills (parallax, lighter)"
     // pass -- a single flat-color silhouette sampled from the SAME

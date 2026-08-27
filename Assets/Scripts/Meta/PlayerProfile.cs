@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Holds the player's local display nickname, persisted through
     // SaveSystem.Data.nickname. Not a singleton (only GameManager/

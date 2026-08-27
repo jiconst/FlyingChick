@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Owns run-wide shared state that terrain, physics, and scoring all
     // read/advance: how far the world has scrolled, which island we're on,

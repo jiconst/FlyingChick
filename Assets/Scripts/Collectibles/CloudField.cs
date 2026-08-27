@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
-    // Cloud placement, ported from flying-chick.html's ensureClouds(). Clouds
+    // Cloud placement, ported from hilly-wings.html's ensureClouds(). Clouds
     // sit at a fixed canvas-Y band (not tied to ground height). Pure data --
     // CloudSpawner owns pooled visuals and collision. Canvas-space convention.
     public class CloudField

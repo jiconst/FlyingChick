@@ -1,4 +1,4 @@
-namespace FlyingChick
+namespace HillyWings
 {
     // Shared mission vocabulary for DailyMissions (persisted, cumulative
     // across a calendar day) and NestMultiplier (per-run, evaluated once at

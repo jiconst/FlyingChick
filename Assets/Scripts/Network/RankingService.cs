@@ -1,9 +1,9 @@
 using System;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
-    // Wraps FlyingChick-Server's /rankings endpoints. Not a singleton, same
+    // Wraps HillyWings-Server's /rankings endpoints. Not a singleton, same
     // reasoning as AuthService. GetRankings is public (no login needed to
     // VIEW rankings); GetMyRank needs AuthService to be logged in first
     // (the server 401s otherwise -- callers should check

@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Keeps the bird inside the camera's view at all times, zooming out
     // exactly as much as its current height requires and smoothly zooming

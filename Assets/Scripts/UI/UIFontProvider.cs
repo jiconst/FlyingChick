@@ -3,7 +3,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.TextCore.LowLevel;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Runtime UI text needs Korean glyph coverage ("병아리", "해가 졌어요",
     // "다시하기", ...), but TextMeshPro's default font (LiberationSans SDF)

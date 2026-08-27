@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Reference: DAY_LENGTH = 90s, dayTime 0..1, endGame() when it hits 1.
     // Only ticks while GameManager.State == Playing; resets on OnRunStart.

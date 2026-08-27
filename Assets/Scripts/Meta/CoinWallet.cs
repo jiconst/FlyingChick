@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // 코인 지갑. SaveSystem.Data.coins(로컬)과 서버 DB(로그인 시) 양쪽에 유지됨.
     //
@@ -10,7 +10,7 @@ namespace FlyingChick
     // 반영하고, 이후 AddCoins/SpendCoins마다 서버에 즉시 push(fire-and-forget).
     // 싱글톤 아님 — GameBootstrapper가 Configure/BindAuth로 연결함.
     //
-    // 점수→코인 환산 비율(score/50)은 레퍼런스(flying-chick.html)에 원본이
+    // 점수→코인 환산 비율(score/50)은 레퍼런스(hilly-wings.html)에 원본이
     // 없는 발명 값 — 실제 밸런스 패스 때 scoreToCoinsRatio 하나로 조절.
     public class CoinWallet : MonoBehaviour
     {

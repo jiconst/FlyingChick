@@ -1,9 +1,9 @@
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // GroundSampler/BirdPhysics are written in the same coordinate convention
-    // as the validated flying-chick.html reference: origin top-left, x grows
+    // as the validated hilly-wings.html reference: origin top-left, x grows
     // right, y grows DOWN ("canvas space"). Keeping that convention lets the
     // ported formulas stay byte-for-byte comparable to the reference. Unity's
     // world space is center-origin and y-up, so the conversion happens only

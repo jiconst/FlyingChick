@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Spec: local Top 10 scores + cumulative stats (total slides, total runs
     // -- "총 비행일 수", one completed run/day-cycle = one day flown).

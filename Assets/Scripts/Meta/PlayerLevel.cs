@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // "총 이동한 거리값을 가지고 레벨업을 하게 하고 싶어" 요청 -- 이 레벨은
     // 매 런 리셋되는 GameManager.Island(그날그날의 섬 진행도, 배수를 올림)와

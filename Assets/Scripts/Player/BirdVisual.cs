@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Cute-chick look, built procedurally (no imported art -- spec explicitly
     // allows this for M1: circle/ellipse/triangle-beak drawing baked into a

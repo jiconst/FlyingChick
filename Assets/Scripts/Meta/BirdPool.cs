@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Plain C# data, not ScriptableObject assets -- same reasoning as
     // MissionPool (M5): this project stays fully code-driven with zero

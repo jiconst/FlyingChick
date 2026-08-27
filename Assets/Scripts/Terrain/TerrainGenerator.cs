@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Rebuilds a single reusable ground mesh every frame by sampling
     // GroundSampler across the current visible width (reference: 6px steps,

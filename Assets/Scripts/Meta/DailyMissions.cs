@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Spec: 3 missions/day, 100 coins each, reset when DateTime.Today
     // changes. Progress persists across runs AND app restarts within the

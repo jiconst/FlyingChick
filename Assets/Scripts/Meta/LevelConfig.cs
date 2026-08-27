@@ -2,10 +2,10 @@ using System;
 using System.IO;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // "레벨업 range 값은 엑셀로 관리하고 유니티와 server에 json으로 import"
-    // 요청 -- 진짜 소스는 ~/src/FlyingChick-Server/design/LevelRanges.xlsx,
+    // 요청 -- 진짜 소스는 ~/src/HillyWings-Server/design/LevelRanges.xlsx,
     // scripts/export_level_ranges.py가 그 엑셀을 읽어서 서버(app/data/
     // level_ranges.json)와 여기(Assets/StreamingAssets/level_ranges.json)
     // 양쪽에 동일한 JSON을 씀 -- 이 파일은 그 결과물을 읽기만 하는 쪽.

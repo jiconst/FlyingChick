@@ -1,10 +1,10 @@
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Reference: const PALETTES = [...] (10 entries), currentPalette() =
     // PALETTES[(island-1) % PALETTES.length]. Hex values copied verbatim
-    // from flying-chick.html so this stays visually identical to the
+    // from hilly-wings.html so this stays visually identical to the
     // validated reference.
     public struct IslandPalette
     {

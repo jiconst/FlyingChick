@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Spec: 3 objectives rolled per run; completing all 3 permanently adds
     // +1 to the STARTING island multiplier for every future run (persisted).

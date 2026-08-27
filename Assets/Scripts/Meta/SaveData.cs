@@ -1,6 +1,6 @@
 using System;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // JsonUtility-serializable save blob (Application.persistentDataPath).
     // Best score is deliberately NOT here -- it stays in PlayerPrefs (M4,
@@ -31,7 +31,7 @@ namespace FlyingChick
         public int language; // Language enum cast to int; 0 = Korean (default)
         public string nickname = "";
 
-        // Online account (FlyingChick-Server) -- JWT access token from a
+        // Online account (HillyWings-Server) -- JWT access token from a
         // previous login/signup, re-validated against GET /auth/me on
         // startup (see AuthService.ValidateStoredToken). Empty means
         // logged out. Plain JSON on disk is NOT secure storage; acceptable

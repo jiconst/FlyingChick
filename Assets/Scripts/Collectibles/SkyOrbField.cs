@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Green "Sky Flight" orb placement. Pure data (no MonoBehaviour) --
     // SkyOrbSpawner owns pooled visuals and pickup detection, reading this

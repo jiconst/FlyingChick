@@ -2,7 +2,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Small set of runtime-construction helpers so UI screens don't each
     // repeat Canvas/TMP/Image boilerplate. Positioning mirrors the old

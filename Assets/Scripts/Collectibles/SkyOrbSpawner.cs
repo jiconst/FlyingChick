@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Pooled green "Sky Flight" orb visuals + pickup detection, same
     // pooled-SpriteRenderer pattern as CoinSpawner/CloudSpawner. On pickup,

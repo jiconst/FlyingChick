@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Reference: draw()'s sky linear gradient (per-island palette top/bottom,
     // darkening toward night, plus a warm dusk band past dayTime 0.55).

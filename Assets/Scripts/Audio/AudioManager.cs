@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Plays the procedurally-synthesized clips from ProceduralAudio.cs for
     // gameplay events and UI button clicks, plus a simple looping ambient

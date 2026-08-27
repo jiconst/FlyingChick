@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Pooled cloud visuals + cloud-touch detection. Reference: touch only
     // counts while airborne, worth 20*(mult/10), and each cloud can only be

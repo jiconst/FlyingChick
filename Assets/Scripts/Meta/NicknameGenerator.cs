@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Random "adjective + chick + number" nickname (e.g. "용감한 병아리123" /
     // "BraveChick123"), generated fresh for every new player and whenever

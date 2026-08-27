@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Owned birds + which one is selected, persisted through
     // SaveSystem.Data.ownedBirdIds/selectedBirdId. Everyone starts owning

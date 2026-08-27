@@ -4,10 +4,10 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
 
-namespace FlyingChick
+namespace HillyWings
 {
-    // Thin UnityWebRequest wrapper for the FlyingChick-Server backend
-    // (~/src/FlyingChick-Server, a separate Python/FastAPI codebase --
+    // Thin UnityWebRequest wrapper for the HillyWings-Server backend
+    // (~/src/HillyWings-Server, a separate Python/FastAPI codebase --
     // see its README for the full API surface). Coroutine-based with
     // Action<T> callbacks rather than async/await, matching this
     // codebase's existing event/callback style -- nothing else here uses

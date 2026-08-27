@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Reference: addScore(n) { let gain = n; if (feverActive) gain *= 2;
     // score += Math.round(gain); } -- fever doubling happens here, at the

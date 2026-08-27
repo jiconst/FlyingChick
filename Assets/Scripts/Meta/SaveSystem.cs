@@ -1,7 +1,7 @@
 using System.IO;
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Best score: PlayerPrefs (M4, spec: "PlayerPrefs는 최고점수만").
     // Everything else (coins, Nest Multiplier bonus, daily mission
@@ -14,8 +14,8 @@ namespace FlyingChick
     {
         public static SaveSystem Instance { get; private set; }
 
-        private const string BestScoreKey = "FlyingChick.BestScore";
-        private const string SaveFileName = "flyingchick_save.json";
+        private const string BestScoreKey = "HillyWings.BestScore";
+        private const string SaveFileName = "hillywings_save.json";
 
         public int BestScore { get; private set; }
         public SaveData Data { get; private set; }
@@ -47,7 +47,7 @@ namespace FlyingChick
             }
             catch (IOException e)
             {
-                Debug.LogWarning($"FlyingChick: save failed ({e.Message})");
+                Debug.LogWarning($"HillyWings: save failed ({e.Message})");
             }
         }
 
@@ -60,7 +60,7 @@ namespace FlyingChick
             }
             catch (IOException e)
             {
-                Debug.LogWarning($"FlyingChick: load failed, starting fresh ({e.Message})");
+                Debug.LogWarning($"HillyWings: load failed, starting fresh ({e.Message})");
             }
             return new SaveData();
         }

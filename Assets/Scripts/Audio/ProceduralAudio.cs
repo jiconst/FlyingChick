@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Every SFX/BGM clip in this game is synthesized at runtime (sine waves
     // + simple attack/release envelopes) -- consistent with the project's

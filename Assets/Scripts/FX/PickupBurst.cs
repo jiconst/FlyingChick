@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // One shared, reusable Unity ParticleSystem for all pickup bursts
     // (coin/speed/cloud). Emission is manual (Burst()) rather than looping,

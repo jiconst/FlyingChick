@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // Reference: sun/moon descending disc (sunY = H*0.14 + dayTime*H*0.62,
     // fixed sunX = W*0.16, swaps to moon past dayTime 0.8) and 40 twinkling

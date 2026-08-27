@@ -1,4 +1,4 @@
-namespace FlyingChick
+namespace HillyWings
 {
     // Start: idle on the title screen (bird sits still, any input begins).
     // Playing: normal gameplay -- physics/scroll/scoring/spawning all tick.

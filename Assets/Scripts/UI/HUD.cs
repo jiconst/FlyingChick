@@ -3,7 +3,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace FlyingChick
+namespace HillyWings
 {
     // M2 scope was a functional score/island/fever/streak readout via
     // OnGUI. M7: converted to a runtime-built UGUI/TextMeshPro hierarchy

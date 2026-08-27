@@ -1,8 +1,8 @@
 using UnityEngine;
 
-namespace FlyingChick
+namespace HillyWings
 {
-    // Pure physics state + step function, ported 1:1 from flying-chick.html's
+    // Pure physics state + step function, ported 1:1 from hilly-wings.html's
     // update() bird section (same constants, same order of operations).
     // Operates in canvas-space (y grows downward) so it stays directly
     // comparable to the reference. No MonoBehaviour/Transform coupling --
