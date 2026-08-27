@@ -53,11 +53,23 @@ namespace HillyWings
     // machine, add that OS's font path here first.
     public static class UIFontProvider
     {
-        private static readonly (string path, int faceIndex)[] KoreanFontCandidates =
+        // StreamingAssets에 번들된 폰트 파일명 목록 (한글 지원 TTF/TTC)
+        // Assets/StreamingAssets/Fonts/ 에 파일을 추가하면 자동으로 탐색됨
+        private static readonly string[] BundledFontNames =
+        {
+            "NanumGothic.ttf",
+            "NanumGothicBold.ttf",
+        };
+
+        // macOS 시스템 폰트 후보 (에디터 및 macOS 빌드용)
+        private static readonly (string path, int faceIndex)[] MacFontCandidates =
         {
             ("/System/Library/Fonts/AppleSDGothicNeo.ttc", 0),
             ("/System/Library/Fonts/Supplemental/AppleGothic.ttf", 0),
         };
+
+        // 프로젝트에 번들된 LiberationSans 경로 (최후 폴백 — 한글 불가, NRE 방지용)
+        private const string LiberationSansPath = "Assets/TextMesh Pro/Fonts/LiberationSans.ttf";
 
         private static TMP_FontAsset cached;
 
@@ -65,10 +77,25 @@ namespace HillyWings
         {
             if (cached != null) return cached;
 
-            foreach (var (path, faceIndex) in KoreanFontCandidates)
+            // 1순위: StreamingAssets 번들 폰트 (iOS/Android/모든 플랫폼 공통)
+            var streamingFontsDir = Path.Combine(Application.streamingAssetsPath, "Fonts");
+            foreach (var name in BundledFontNames)
+            {
+                var path = Path.Combine(streamingFontsDir, name);
+                if (!File.Exists(path)) continue;
+                var asset = TMP_FontAsset.CreateFontAsset(path, 0, 64, 9, GlyphRenderMode.SDFAA, 2048, 2048);
+                if (asset != null)
+                {
+                    asset.name = "Runtime Korean SDF";
+                    cached = asset;
+                    return cached;
+                }
+            }
+
+            // 2순위: macOS 시스템 폰트 (에디터 / macOS 빌드)
+            foreach (var (path, faceIndex) in MacFontCandidates)
             {
                 if (!File.Exists(path)) continue;
-
                 var asset = TMP_FontAsset.CreateFontAsset(path, faceIndex, 64, 9, GlyphRenderMode.SDFAA, 2048, 2048);
                 if (asset != null)
                 {
@@ -78,15 +105,26 @@ namespace HillyWings
                 }
             }
 
-            // Safety net so a missing/renamed font file degrades to
-            // Latin-only text instead of an NRE crashing the whole UI --
-            // this path uses a real bundled Font asset (not an OS dynamic
-            // font), so LoadFontFace succeeds; Korean text will show as
-            // tofu if this branch is ever hit.
-            Debug.LogError("UIFontProvider: no Korean-capable font file found among candidates -- Hangul text will be missing/tofu. Check the paths in KoreanFontCandidates for this machine/OS.");
-            var fallbackFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            cached = TMP_FontAsset.CreateFontAsset(fallbackFont, 64, 9, GlyphRenderMode.SDFAA, 2048, 2048);
-            cached.name = "Runtime Fallback SDF (Latin only)";
+            // 3순위: 프로젝트 번들 LiberationSans (한글 불가, 최후 NRE 방지 폴백)
+            Debug.LogError(
+                "UIFontProvider: 한글 폰트를 찾지 못했습니다.\n" +
+                "Assets/StreamingAssets/Fonts/NanumGothic.ttf 를 추가하면 한글이 정상 표시됩니다.\n" +
+                "현재는 Latin 전용 폰트(LiberationSans)로 폴백합니다 — 한글이 □로 표시됩니다.");
+
+            if (File.Exists(LiberationSansPath))
+            {
+                var asset = TMP_FontAsset.CreateFontAsset(LiberationSansPath, 0, 64, 9, GlyphRenderMode.SDFAA, 2048, 2048);
+                if (asset != null)
+                {
+                    asset.name = "Runtime Fallback SDF (Latin only)";
+                    cached = asset;
+                    return cached;
+                }
+            }
+
+            // 최후의 최후: TMP 기본 폰트 에셋 사용 (NRE 방지)
+            cached = TMP_Settings.defaultFontAsset;
+            Debug.LogError("UIFontProvider: 모든 폰트 후보 실패. TMP 기본 폰트를 사용합니다.");
             return cached;
         }
     }

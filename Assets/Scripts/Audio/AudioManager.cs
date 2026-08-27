@@ -20,7 +20,7 @@ namespace HillyWings
         private int nextSfxSource;
         private AudioSource bgmSource;
 
-        private AudioClip coinClip, speedClip, greatSlideClip, feverClip, cloudClip, islandClip, launchClip, clickClip, dayOverClip;
+        private AudioClip coinClip, speedClip, greatSlideClip, feverClip, cloudClip, islandClip, launchClip, clickClip, dayOverClip, bgmClip;
         // "녹색공을 먹었을때는 병아리 삐약거리는 사운드와 함께 정말 병아리가
         // 날아가는 듯한 사운드" 요청 -- 두 클립을 같이 재생(Play()를 두 번
         // 호출하면 각각 다른 sfxSources 슬롯을 잡아서 자연스럽게 겹쳐 들림).
@@ -110,9 +110,15 @@ namespace HillyWings
             skyFlightChirpClip = ProceduralAudio.Chime("SFX_SkyFlightChirp", new[] { 2200f, 1800f, 2400f, 2000f }, 0.07f, 0.4f);
             skyFlightWhooshClip = ProceduralAudio.Sweep("SFX_SkyFlightWhoosh", 250f, 1100f, 1.0f, 0.3f);
 
-            // 3레이어 절차적 BGM: 코드 패드 + 베이스 펄스 + 멜로디.
-            // ProceduralAudio.GameBGM 참고 (C장조 펜타토닉, 120BPM, 8초 루프).
-            bgmSource.clip = ProceduralAudio.GameBGM("BGM_Main");
+            // Resources/Audio/BGM/bensound-cute 에서 실제 BGM을 로드,
+            // 없으면 절차적 합성 BGM으로 폴백
+            bgmClip = Resources.Load<AudioClip>("Audio/BGM/bensound-cute");
+            if (bgmClip == null)
+            {
+                Debug.LogWarning("[AudioManager] Assets/Resources/Audio/BGM/bensound-cute.mp3 를 찾지 못했습니다. 절차적 BGM으로 폴백합니다.");
+                bgmClip = ProceduralAudio.GameBGM("BGM_Main");
+            }
+            bgmSource.clip = bgmClip;
         }
 
         public void Configure(BirdController birdRef, SlideJudge slideJudgeRef, FeverSystem feverRef, CoinSpawner coinSpawnerRef, CloudSpawner cloudSpawnerRef, SkyOrbSpawner skyOrbSpawnerRef, GameManager gameManagerRef, DayCycle dayCycleRef)
