@@ -57,8 +57,7 @@ namespace HillyWings
         // Assets/StreamingAssets/Fonts/ 에 파일을 추가하면 자동으로 탐색됨
         private static readonly string[] BundledFontNames =
         {
-            "NanumGothic.ttf",
-            "NanumGothicBold.ttf",
+            "NanumGothic-Bold.ttf",
         };
 
         // macOS 시스템 폰트 후보 (에디터 및 macOS 빌드용)
