@@ -16,7 +16,7 @@ namespace HillyWings
     public class BirdController : MonoBehaviour
     {
         [SerializeField] private float radius = 15f;
-        [SerializeField] private float startXFraction = 0.28f;
+        [SerializeField] private float startXFraction = 0.5f;
         [SerializeField] private float skyFlightScoreRate = 0.03f; // score per world-unit traveled while a Sky Flight buff is active -- see FixedUpdate
 
         public event Action OnGreatSlideLanding;

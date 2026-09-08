@@ -57,6 +57,16 @@ namespace HillyWings
     }}
 }}
 ";
+            // 내용이 동일하면 쓰지 않음 — [InitializeOnLoad]가 도메인 리로드마다
+            // 실행되므로, ImportAsset → 재컴파일 → 재실행 무한 루프를 막기 위해
+            // 실제로 바뀐 경우에만 파일 I/O + 임포트를 수행한다.
+            string existing = File.Exists(OutputPath) ? File.ReadAllText(OutputPath) : "";
+            if (existing == content)
+            {
+                Debug.Log($"[ServerConfigSync] 변경 없음, 스킵: {baseUrl}");
+                return;
+            }
+
             File.WriteAllText(OutputPath, content);
             AssetDatabase.ImportAsset("Assets/Scripts/Network/ServerConfig.cs",
                 ImportAssetOptions.ForceUpdate);

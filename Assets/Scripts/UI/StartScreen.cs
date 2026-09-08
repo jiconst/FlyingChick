@@ -113,6 +113,7 @@ namespace HillyWings
 
         // 게임 방법
         private TextMeshProUGUI howToPlayTitleText;
+        private RectTransform howToPlayCardRT;   // 본문 카드 배경
         private TextMeshProUGUI howToPlayBodyText;
         private Button howToPlayBackButton;
         private TextMeshProUGUI howToPlayBackButtonText;
@@ -486,10 +487,17 @@ namespace HillyWings
         {
             var brown = new Color(0.42f, 0.29f, 0.12f);
 
-            howToPlayTitleText = UIFactory.CreateText(parent, "Title", 32, new Color(0.36f, 0.24f, 0.1f), TextAlignmentOptions.Center, FontStyles.Bold);
-            howToPlayBodyText = UIFactory.CreateText(parent, "Body", 16, brown, TextAlignmentOptions.TopLeft);
+            howToPlayTitleText = UIFactory.CreateText(parent, "Title", 46,
+                new Color(0.98f, 0.92f, 0.75f), TextAlignmentOptions.Center, FontStyles.Bold);
 
-            howToPlayBackButton = UIFactory.CreateButton(parent, "HowToPlayBackButton", "", 15, brown, out howToPlayBackButtonText);
+            // 카드 배경 — 본문 텍스트보다 먼저 생성해야 뒤에 렌더링됨
+            var card = UIFactory.CreatePanel(parent, "HowToPlayCard", new Color(0.06f, 0.03f, 0.12f, 0.82f));
+            howToPlayCardRT = (RectTransform)card.transform;
+
+            howToPlayBodyText = UIFactory.CreateText(parent, "Body", 24,
+                new Color(0.93f, 0.88f, 0.8f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+
+            howToPlayBackButton = UIFactory.CreateButton(parent, "HowToPlayBackButton", "", 24, brown, out howToPlayBackButtonText);
             howToPlayBackButton.onClick.AddListener(() => { audio?.PlayClick(); SwitchTo(Panel.MainMenu); });
         }
 
@@ -770,11 +778,31 @@ namespace HillyWings
 
         private void ReflowHowToPlay(float cx, float cy)
         {
-            UIFactory.SetTopLeftCentered((RectTransform)howToPlayTitleText.transform, cx - 300f, cy - 220f, 600f, 50f);
-            UIFactory.SetTopLeft((RectTransform)howToPlayBodyText.transform, cx - 320f, cy - 150f, 640f, 320f);
+            const float cardW   = 680f;
+            const float cardPad = 16f;
+            const float titleH  = 64f;
+            const float bodyH   = 310f;   // 본문 텍스트 영역 높이
+            const float btnW    = 220f;
+            const float btnH    = 58f;
 
-            const float btnW = 200f, btnH = 46f;
-            UIFactory.SetTopLeftCentered((RectTransform)howToPlayBackButton.transform, cx - btnW * 0.5f, cy + 200f, btnW, btnH);
+            float titleTop = cy - 240f;
+            UIFactory.SetTopLeftCentered((RectTransform)howToPlayTitleText.transform,
+                cx - cardW * 0.5f, titleTop, cardW, titleH);
+
+            // 본문 텍스트
+            float bodyTop = titleTop + titleH + 10f;
+            UIFactory.SetTopLeft((RectTransform)howToPlayBodyText.transform,
+                cx - cardW * 0.5f + cardPad, bodyTop + cardPad,
+                cardW - cardPad * 2f, bodyH);
+
+            // 카드 박스 (본문 텍스트 감쌈)
+            UIFactory.SetTopLeft(howToPlayCardRT,
+                cx - cardW * 0.5f, bodyTop,
+                cardW, bodyH + cardPad * 2f);
+
+            float btnY = bodyTop + bodyH + cardPad * 2f + 14f;
+            UIFactory.SetTopLeftCentered((RectTransform)howToPlayBackButton.transform,
+                cx - btnW * 0.5f, btnY, btnW, btnH);
         }
 
         private void ReflowStats(float cx, float cy)

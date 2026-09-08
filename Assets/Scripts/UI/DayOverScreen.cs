@@ -4,19 +4,6 @@ using UnityEngine.UI;
 
 namespace HillyWings
 {
-    // Reference: endScreen -- final stats (score/island/slides), submits to
-    // SaveSystem, shows Best line, "다시하기"(restart)/"홈"(back to start)
-    // buttons. Coin count-up animation is a later visual pass.
-    //
-    // M5 additions: coins earned this run (CoinWallet), and pass/fail for
-    // this run's 3 Nest Multiplier objectives (NestMultiplier).
-    //
-    // M7: converted from OnGUI to a runtime-built UGUI/TextMeshPro
-    // hierarchy. This screen is only shown while idle between runs (never
-    // during active gameplay), so unlike HUD/StartScreen it just
-    // recomputes its whole layout every frame it's visible rather than
-    // gating on a resize check -- simpler and not worth the extra
-    // bookkeeping here.
     public class DayOverScreen : MonoBehaviour
     {
         private const int StatLineCount = 7;
@@ -38,15 +25,34 @@ namespace HillyWings
         private GameObject root;
         private TextMeshProUGUI titleText;
         private TextMeshProUGUI bestBadgeText;
+
+        // 스탯 카드
+        private RectTransform statCardRT;
         private readonly TextMeshProUGUI[] statLines = new TextMeshProUGUI[StatLineCount];
+
+        // 네스트 카드
+        private RectTransform nestCardRT;
         private TextMeshProUGUI nestHeaderText;
         private readonly TextMeshProUGUI[] nestLines = new TextMeshProUGUI[MaxNestLines];
+
         private Button restartButton;
         private TextMeshProUGUI restartButtonText;
         private Button homeButton;
         private TextMeshProUGUI homeButtonText;
 
-        public void Bind(ScoreManager scoreRef, SlideJudge slideJudgeRef, CloudSpawner cloudSpawnerRef, FeverSystem feverRef, GameManager gameManagerRef, CoinWallet walletRef, NestMultiplier nestRef, AudioManager audioRef, AuthService authRef = null)
+        // 레이아웃 상수
+        private const float CardW   = 660f;
+        private const float CardPad = 12f;
+        private const float StatH   = 42f;   // 스탯 한 줄 높이
+        private const float NestH   = 38f;   // 네스트 한 줄 높이
+        private const float TitleH  = 66f;
+        private const float BadgeH  = 36f;
+        private const float BtnH    = 60f;
+        private const float BtnW    = 188f;
+
+        public void Bind(ScoreManager scoreRef, SlideJudge slideJudgeRef, CloudSpawner cloudSpawnerRef,
+            FeverSystem feverRef, GameManager gameManagerRef, CoinWallet walletRef,
+            NestMultiplier nestRef, AudioManager audioRef, AuthService authRef = null)
         {
             score = scoreRef;
             slideJudge = slideJudgeRef;
@@ -80,46 +86,51 @@ namespace HillyWings
             root = canvas.gameObject;
             var t = canvas.transform;
 
-            var overlay = UIFactory.CreatePanel(t, "Overlay", new Color(0.1f, 0.05f, 0.15f, 0.6f));
+            // 반투명 전체 오버레이
+            var overlay = UIFactory.CreatePanel(t, "Overlay", new Color(0.08f, 0.04f, 0.12f, 0.7f));
             UIFactory.StretchFull((RectTransform)overlay.transform);
 
-            titleText = UIFactory.CreateText(t, "Title", 36, new Color(0.32f, 0.2f, 0.36f), TextAlignmentOptions.Center, FontStyles.Bold);
+            // 타이틀
+            titleText = UIFactory.CreateText(t, "Title", 52, new Color(1f, 0.93f, 0.75f),
+                TextAlignmentOptions.Center, FontStyles.Bold);
 
-            bestBadgeText = UIFactory.CreateText(t, "BestBadge", 16, new Color(1f, 0.55f, 0.15f), TextAlignmentOptions.Center, FontStyles.Bold);
-            bestBadgeText.text = "NEW HIGHSCORE!";
+            // NEW HIGHSCORE 뱃지
+            bestBadgeText = UIFactory.CreateText(t, "BestBadge", 24, new Color(1f, 0.6f, 0.1f),
+                TextAlignmentOptions.Center, FontStyles.Bold);
+            bestBadgeText.text = "★ NEW HIGHSCORE! ★";
 
-            var statColor = new Color(0.32f, 0.2f, 0.2f);
+            // 스탯 카드 배경 — statLines보다 먼저 생성해야 뒤에 렌더링됨
+            var statCard = UIFactory.CreatePanel(t, "StatCard", new Color(0.04f, 0.02f, 0.08f, 0.85f));
+            statCardRT = (RectTransform)statCard.transform;
+
+            // 스탯 텍스트 (폰 가독성을 위해 굵고 밝게)
+            var statColor = new Color(0.95f, 0.9f, 0.82f);
             for (int i = 0; i < StatLineCount; i++)
-                statLines[i] = UIFactory.CreateText(t, $"Stat{i}", 18, statColor, TextAlignmentOptions.Center);
+                statLines[i] = UIFactory.CreateText(t, $"Stat{i}", 28, statColor,
+                    TextAlignmentOptions.Center, FontStyles.Bold);
 
-            nestHeaderText = UIFactory.CreateText(t, "NestHeader", 16, new Color(0.42f, 0.29f, 0.12f), TextAlignmentOptions.Center, FontStyles.Bold);
+            // 네스트 카드 배경 — nestLines보다 먼저 생성
+            var nestCard = UIFactory.CreatePanel(t, "NestCard", new Color(0.1f, 0.06f, 0.01f, 0.85f));
+            nestCardRT = (RectTransform)nestCard.transform;
+
+            nestHeaderText = UIFactory.CreateText(t, "NestHeader", 22, new Color(1f, 0.8f, 0.3f),
+                TextAlignmentOptions.Center, FontStyles.Bold);
 
             for (int i = 0; i < MaxNestLines; i++)
-                nestLines[i] = UIFactory.CreateText(t, $"NestLine{i}", 15, Color.white, TextAlignmentOptions.Center);
+                nestLines[i] = UIFactory.CreateText(t, $"NestLine{i}", 24, Color.white,
+                    TextAlignmentOptions.Center, FontStyles.Bold);
 
-            restartButton = UIFactory.CreateButton(t, "RestartButton", "", 20, new Color(0.3f, 0.2f, 0.1f), out restartButtonText);
-            restartButton.onClick.AddListener(() =>
-            {
-                audio?.PlayClick();
-                gameManager.BeginRun();
-            });
+            restartButton = UIFactory.CreateButton(t, "RestartButton", "", 26,
+                new Color(0.35f, 0.2f, 0.08f), out restartButtonText);
+            restartButton.onClick.AddListener(() => { audio?.PlayClick(); gameManager.BeginRun(); });
 
-            homeButton = UIFactory.CreateButton(t, "HomeButton", "", 20, new Color(0.3f, 0.2f, 0.1f), out homeButtonText);
-            homeButton.onClick.AddListener(() =>
-            {
-                audio?.PlayClick();
-                gameManager.ReturnToStart();
-            });
+            homeButton = UIFactory.CreateButton(t, "HomeButton", "", 26,
+                new Color(0.18f, 0.18f, 0.28f), out homeButtonText);
+            homeButton.onClick.AddListener(() => { audio?.PlayClick(); gameManager.ReturnToStart(); });
 
             RefreshStaticLabels();
         }
 
-        // Only titleText/restartButtonText/homeButtonText are set once here
-        // and never touched again -- everything else in this screen's
-        // Layout() already reassigns .text every frame it's visible, so it
-        // picks up a language change on its own (see the M7 comment on
-        // Layout() -- this screen isn't perf-sensitive enough to bother
-        // gating that).
         private void RefreshStaticLabels()
         {
             titleText.text = Localization.Get("dayover.title");
@@ -138,7 +149,6 @@ namespace HillyWings
                 isNewBest = SaveSystem.Instance != null && SaveSystem.Instance.SubmitScore(score.Score);
                 submittedThisRun = true;
                 int slides = slideJudge != null ? slideJudge.TotalSlides : 0;
-                // 로그인 상태면 서버에 이 런의 결과를 제출하고 로컬 통계도 즉시 반영.
                 auth?.SubmitScore(score.Score, gameManager.Island, slides);
             }
 
@@ -150,12 +160,23 @@ namespace HillyWings
             float cx = Screen.width * 0.5f;
             float cy = Screen.height * 0.5f;
 
-            UIFactory.SetTopLeftCentered((RectTransform)titleText.transform, cx - 300f, cy - 210f, 600f, 46f);
+            // ── 타이틀 ──────────────────────────────────────────────────
+            float titleTop = cy - 248f;
+            UIFactory.SetTopLeftCentered((RectTransform)titleText.transform,
+                cx - CardW * 0.5f, titleTop, CardW, TitleH);
 
+            // ── NEW HIGHSCORE 뱃지 ────────────────────────────────────
             bestBadgeText.gameObject.SetActive(isNewBest);
+            float statTop = titleTop + TitleH + 10f;
             if (isNewBest)
-                UIFactory.SetTopLeftCentered((RectTransform)bestBadgeText.transform, cx - 300f, cy - 170f, 600f, 24f);
+            {
+                float badgeTop = titleTop + TitleH + 6f;
+                UIFactory.SetTopLeftCentered((RectTransform)bestBadgeText.transform,
+                    cx - CardW * 0.5f, badgeTop, CardW, BadgeH);
+                statTop = badgeTop + BadgeH + 6f;
+            }
 
+            // ── 스탯 라인 (카드 안) ───────────────────────────────────
             string[] lines =
             {
                 $"Score: {score.Score:N0}",
@@ -164,35 +185,55 @@ namespace HillyWings
                 $"Cloud Touches: {(cloudSpawner != null ? cloudSpawner.TouchCount : 0)}",
                 $"Longest Fever: {(fever != null ? fever.LongestDuration : 0f):0.0}s",
                 $"Best: {(SaveSystem.Instance != null ? SaveSystem.Instance.BestScore : score.Score):N0}",
-                $"Coins earned: +{(wallet != null ? wallet.LastRunCoinsAwarded : 0)}  (total {(wallet != null ? wallet.Coins : 0):N0})"
+                $"Coins earned: +{(wallet != null ? wallet.LastRunCoinsAwarded : 0)}" +
+                $"  (total {(wallet != null ? wallet.Coins : 0):N0})"
             };
 
-            float y = cy - 140f;
+            float y = statTop + CardPad;
             for (int i = 0; i < StatLineCount; i++)
             {
                 statLines[i].text = lines[i];
-                UIFactory.SetTopLeftCentered((RectTransform)statLines[i].transform, cx - 300f, y, 600f, 24f);
-                y += 24f;
+                UIFactory.SetTopLeftCentered((RectTransform)statLines[i].transform,
+                    cx - CardW * 0.5f, y, CardW, StatH);
+                y += StatH;
             }
 
-            if (nest != null) y = LayoutNestObjectives(cx, y + 8f);
+            // 스탯 카드 박스 위치 (텍스트 전체를 감쌈)
+            UIFactory.SetTopLeft(statCardRT,
+                cx - CardW * 0.5f - CardPad, statTop,
+                CardW + CardPad * 2f, y - statTop + CardPad);
+
+            // ── 네스트 목표 (카드 안) ─────────────────────────────────
+            float nestSectionStart = y + CardPad + 14f;
+            if (nest != null)
+                y = LayoutNestObjectives(cx, nestSectionStart);
             else
             {
                 nestHeaderText.gameObject.SetActive(false);
                 for (int i = 0; i < MaxNestLines; i++) nestLines[i].gameObject.SetActive(false);
+                nestCardRT.gameObject.SetActive(false);
+                y = nestSectionStart;
             }
 
-            float btnY = Mathf.Max(y + 16f, cy + 130f);
-            UIFactory.SetTopLeftCentered((RectTransform)restartButton.transform, cx - 170f, btnY, 150f, 46f);
-            UIFactory.SetTopLeftCentered((RectTransform)homeButton.transform, cx + 20f, btnY, 150f, 46f);
+            // ── 버튼 ─────────────────────────────────────────────────
+            float btnY = Mathf.Max(y + 16f, cy + 220f);
+            UIFactory.SetTopLeftCentered((RectTransform)restartButton.transform,
+                cx - BtnW - 10f, btnY, BtnW, BtnH);
+            UIFactory.SetTopLeftCentered((RectTransform)homeButton.transform,
+                cx + 10f, btnY, BtnW, BtnH);
         }
 
-        private float LayoutNestObjectives(float cx, float y)
+        private float LayoutNestObjectives(float cx, float nestTop)
         {
+            nestCardRT.gameObject.SetActive(true);
             nestHeaderText.gameObject.SetActive(true);
+
+            float y = nestTop + CardPad;
+
             nestHeaderText.text = $"Nest Multiplier (+{nest.Bonus})";
-            UIFactory.SetTopLeftCentered((RectTransform)nestHeaderText.transform, cx - 300f, y, 600f, 22f);
-            y += 24f;
+            UIFactory.SetTopLeftCentered((RectTransform)nestHeaderText.transform,
+                cx - CardW * 0.5f, y, CardW, 32f);
+            y += 34f;
 
             var missions = nest.ActiveMissions;
             for (int i = 0; i < MaxNestLines; i++)
@@ -202,12 +243,17 @@ namespace HillyWings
                 nestLines[i].gameObject.SetActive(true);
                 var mission = missions[i];
                 bool passed = nest.GetProgress(mission) >= mission.Target;
-                nestLines[i].color = passed ? new Color(0.2f, 0.55f, 0.2f) : new Color(0.55f, 0.2f, 0.2f);
-                string mark = passed ? "O" : "X";
-                nestLines[i].text = $"{mark} {mission.Description}";
-                UIFactory.SetTopLeftCentered((RectTransform)nestLines[i].transform, cx - 300f, y, 600f, 22f);
-                y += 22f;
+                nestLines[i].color = passed ? new Color(0.2f, 0.8f, 0.3f) : new Color(0.9f, 0.35f, 0.3f);
+                nestLines[i].text = (passed ? "O " : "X ") + mission.Description;
+                UIFactory.SetTopLeftCentered((RectTransform)nestLines[i].transform,
+                    cx - CardW * 0.5f, y, CardW, NestH);
+                y += NestH;
             }
+
+            // 네스트 카드 박스
+            UIFactory.SetTopLeft(nestCardRT,
+                cx - CardW * 0.5f - CardPad, nestTop,
+                CardW + CardPad * 2f, y - nestTop + CardPad);
 
             return y;
         }
